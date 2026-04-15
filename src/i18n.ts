@@ -40,6 +40,28 @@ const texts = {
     en: "Simple, clean, and stable Gantt project workspace"
   },
   language: { zh: "\u8bed\u8a00", en: "Language" },
+  login: { zh: "\u767b\u5f55", en: "Login" },
+  register: { zh: "\u6ce8\u518c", en: "Register" },
+  logout: { zh: "\u9000\u51fa", en: "Logout" },
+  email: { zh: "\u90ae\u7bb1", en: "Email" },
+  password: { zh: "\u5bc6\u7801", en: "Password" },
+  authReadonlyHint: { zh: "\u672a\u767b\u5f55\uff1a\u5f53\u524d\u4e3a\u53ea\u8bfb\u6a21\u5f0f", en: "Not signed in: read-only mode" },
+  authSignedInAs: { zh: "\u5df2\u767b\u5f55", en: "Signed in" },
+  authDialogLoginTitle: { zh: "\u8d26\u53f7\u767b\u5f55", en: "Sign In" },
+  authDialogRegisterTitle: { zh: "\u6ce8\u518c\u8d26\u53f7", en: "Create Account" },
+  authSubmitLogin: { zh: "\u767b\u5f55\u5e76\u8fdb\u5165\u7f16\u8f91", en: "Sign In to Edit" },
+  authSubmitRegister: { zh: "\u6ce8\u518c\u5e76\u767b\u5f55", en: "Create Account" },
+  authSwitchToLogin: { zh: "\u5df2\u6709\u8d26\u53f7\uff1f\u767b\u5f55", en: "Already have an account? Sign in" },
+  authSwitchToRegister: { zh: "\u6ca1\u6709\u8d26\u53f7\uff1f\u6ce8\u518c", en: "No account? Register" },
+  authErrorEmailPasswordRequired: {
+    zh: "\u8bf7\u586b\u5199\u6709\u6548\u7684\u90ae\u7bb1\u548c\u81f3\u5c11 6 \u4f4d\u5bc6\u7801",
+    en: "Enter a valid email and password (at least 6 characters)"
+  },
+  authErrorGeneric: { zh: "\u767b\u5f55\u6216\u6ce8\u518c\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5", en: "Authentication failed. Please try again." },
+  authRegisterSuccess: {
+    zh: "\u6ce8\u518c\u6210\u529f\uff0c\u82e5\u5f00\u542f\u90ae\u7bb1\u9a8c\u8bc1\uff0c\u8bf7\u5148\u5b8c\u6210\u9a8c\u8bc1\u518d\u767b\u5f55",
+    en: "Account created. If email confirmation is enabled, verify email first."
+  },
   saveChanges: { zh: "\u4fdd\u5b58", en: "Save" },
   saved: { zh: "\u5df2\u4fdd\u5b58", en: "Saved" },
   addProject: { zh: "\u65b0\u589e\u9879\u76ee", en: "New Project" },

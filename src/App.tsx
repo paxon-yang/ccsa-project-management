@@ -1,15 +1,28 @@
-import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { AuthDialog } from "./components/AuthDialog";
 import { GanttBoard } from "./components/GanttBoard";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { TaskFormDrawer } from "./components/TaskFormDrawer";
 import { defaultState } from "./data/defaultData";
 import { createTranslator } from "./i18n";
+import {
+  AuthUser,
+  getCurrentUser,
+  isRemoteStoreEnabled,
+  loadRemoteState,
+  onAuthUserChange,
+  saveRemoteState,
+  signInWithPassword,
+  signOutRemote,
+  signUpWithPassword
+} from "./lib/remoteStore";
 import { Language, PersistedState, SortBy, TaskFilters, TaskItem, ViewModeOption } from "./types";
 import { calcDuration, normalizeDates } from "./utils/date";
 import { getDescendantIds, getVisibleTasks, reorderTasks, sanitizeTask } from "./utils/taskUtils";
 
 const STORAGE_KEY = "ccsa-project-management-state-v2";
+const LEGACY_STORAGE_KEYS = ["ccsa-project-management-state-v1"];
 const LANGUAGE_KEY = "ccsa-project-management-language";
 const LEGACY_PROJECT_NAME = "CCSA主项目 / CCSA Main Project";
 const TARGET_PROJECT_NAME = "TMM project";
@@ -35,29 +48,39 @@ const normalizeCategory = (task: Partial<TaskItem>): string => {
   return "General";
 };
 
+const normalizePersistedState = (parsed: PersistedState): PersistedState => ({
+  ...parsed,
+  projects: parsed.projects.map((project) =>
+    project.name === LEGACY_PROJECT_NAME ? { ...project, name: TARGET_PROJECT_NAME } : project
+  ),
+  tasks: (parsed.tasks ?? []).map((task) => ({
+    ...task,
+    status: normalizeStatus(task.status),
+    priority: normalizePriority(task.priority),
+    category: normalizeCategory(task),
+    dependencyIds: Array.isArray(task.dependencyIds) ? task.dependencyIds : [],
+    isCategoryPlaceholder: Boolean(task.isCategoryPlaceholder)
+  }))
+});
+
 const loadState = (): PersistedState => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState;
-    const parsed = JSON.parse(raw) as PersistedState;
-    if (!parsed.projects?.length) return defaultState;
-    return {
-      ...parsed,
-      projects: parsed.projects.map((project) =>
-        project.name === LEGACY_PROJECT_NAME ? { ...project, name: TARGET_PROJECT_NAME } : project
-      ),
-      tasks: (parsed.tasks ?? []).map((task) => ({
-        ...task,
-        status: normalizeStatus(task.status),
-        priority: normalizePriority(task.priority),
-        category: normalizeCategory(task),
-        dependencyIds: Array.isArray(task.dependencyIds) ? task.dependencyIds : [],
-        isCategoryPlaceholder: Boolean(task.isCategoryPlaceholder)
-      }))
-    };
-  } catch {
-    return defaultState;
+  const candidateKeys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS];
+  for (const key of candidateKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as PersistedState;
+      if (!parsed.projects?.length) continue;
+      const normalized = normalizePersistedState(parsed);
+      if (key !== STORAGE_KEY) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      }
+      return normalized;
+    } catch {
+      // ignore invalid legacy payload and keep trying
+    }
   }
+  return defaultState;
 };
 
 const saveState = (state: PersistedState) => {
@@ -76,6 +99,15 @@ export const App = () => {
   const [activeProjectId, setActiveProjectId] = useState(initial.activeProjectId || initial.projects[0]?.id || "");
   const [language, setLanguage] = useState<Language>(loadLanguage());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isAuthDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string>();
+  const [authSuccess, setAuthSuccess] = useState<string>();
+  const [isAuthLoading, setAuthLoading] = useState(false);
 
   const [isTaskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [isProjectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -93,11 +125,71 @@ export const App = () => {
   };
 
   const t = createTranslator(language);
+  const canEdit = !isRemoteStoreEnabled || Boolean(currentUser);
 
   const visibleTasks = useMemo(
     () => getVisibleTasks(tasks, activeProjectId, collapsedTaskIds, searchText, filters, sortBy),
     [tasks, activeProjectId, collapsedTaskIds, searchText, filters, sortBy]
   );
+
+  useEffect(() => {
+    if (!isRemoteStoreEnabled) return;
+    let cancelled = false;
+
+    const syncUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (!cancelled) setCurrentUser(user);
+      } catch (error) {
+        console.error("Auth bootstrap failed:", error);
+      }
+    };
+
+    void syncUser();
+    const unsubscribe = onAuthUserChange((user) => {
+      if (cancelled) return;
+      setCurrentUser(user);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isRemoteStoreEnabled) return;
+    let cancelled = false;
+
+    const hydrateFromRemote = async () => {
+      try {
+        const remote = await loadRemoteState();
+        if (cancelled || !remote) return;
+        const normalized = normalizePersistedState(remote);
+        setProjects(normalized.projects);
+        setTasks(normalized.tasks.map(sanitizeTask));
+        setActiveProjectId(normalized.activeProjectId || normalized.projects[0]?.id || "");
+        setHasUnsavedChanges(false);
+      } catch (error) {
+        console.error("Remote load failed:", error);
+      }
+    };
+
+    void hydrateFromRemote();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const syncState = (nextProjects: PersistedState["projects"], nextTasks: PersistedState["tasks"], nextActiveProjectId: string) => {
     setProjects(nextProjects);
@@ -106,17 +198,93 @@ export const App = () => {
     setHasUnsavedChanges(true);
   };
 
-  const handleSaveAll = () => {
-    saveState({
+  const openAuthDialog = (mode: "login" | "register" = "login") => {
+    setAuthMode(mode);
+    setAuthError(undefined);
+    setAuthSuccess(undefined);
+    setAuthDialogOpen(true);
+  };
+
+  const requireEditPermission = (): boolean => {
+    if (canEdit) return true;
+    openAuthDialog("login");
+    return false;
+  };
+
+  const handleAuthSubmit = async () => {
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || password.length < 6) {
+      setAuthError(t("authErrorEmailPasswordRequired"));
+      setAuthSuccess(undefined);
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError(undefined);
+    setAuthSuccess(undefined);
+    try {
+      if (authMode === "login") {
+        await signInWithPassword(email, password);
+        setAuthDialogOpen(false);
+      } else {
+        const user = await signUpWithPassword(email, password);
+        if (user) {
+          setAuthDialogOpen(false);
+        } else {
+          setAuthSuccess(t("authRegisterSuccess"));
+        }
+      }
+      setAuthPassword("");
+    } catch (error) {
+      console.error("Auth action failed:", error);
+      const message = error instanceof Error && error.message ? error.message : t("authErrorGeneric");
+      setAuthError(message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!isRemoteStoreEnabled) return;
+    try {
+      await signOutRemote();
+      setAuthPassword("");
+      setAuthError(undefined);
+      setAuthSuccess(undefined);
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (!requireEditPermission()) return;
+    const snapshot: PersistedState = {
       projects,
       tasks,
       activeProjectId
-    });
+    };
+    setIsSaving(true);
+    let remoteSaved = true;
+    try {
+      if (isRemoteStoreEnabled) {
+        await saveRemoteState(snapshot);
+      }
+    } catch (error) {
+      remoteSaved = false;
+      console.error("Remote save failed:", error);
+      window.alert(language === "zh" ? "云端保存失败，请稍后重试。" : "Cloud save failed. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+
+    saveState(snapshot);
     localStorage.setItem(LANGUAGE_KEY, language);
-    setHasUnsavedChanges(false);
+    setHasUnsavedChanges(!remoteSaved && isRemoteStoreEnabled);
   };
 
   const handleProjectCreate = (name: string, description: string) => {
+    if (!requireEditPermission()) return;
     const newProject = { id: `project-${uuidv4()}`, name, description };
     const nextProjects = [...projects, newProject];
     syncState(nextProjects, tasks, newProject.id);
@@ -124,6 +292,7 @@ export const App = () => {
   };
 
   const handleTaskSubmit = (task: TaskItem) => {
+    if (!requireEditPermission()) return;
     const normalized = sanitizeTask(task);
     const exists = tasks.some((item) => item.id === normalized.id);
     const nextTasks = exists ? tasks.map((item) => (item.id === normalized.id ? normalized : item)) : [...tasks, normalized];
@@ -133,6 +302,7 @@ export const App = () => {
   };
 
   const handleTaskDelete = (taskId: string) => {
+    if (!requireEditPermission()) return;
     const deletedIds = new Set([taskId, ...getDescendantIds(tasks, taskId)]);
     const nextTasks = tasks
       .filter((task) => !deletedIds.has(task.id))
@@ -147,6 +317,7 @@ export const App = () => {
   };
 
   const handleTaskDateChange = (taskId: string, startDate: string, endDate: string) => {
+    if (!requireEditPermission()) return;
     const normalized = normalizeDates(startDate, endDate);
     const nextTasks = tasks.map((task) =>
       task.id === taskId
@@ -162,12 +333,14 @@ export const App = () => {
   };
 
   const handleTaskProgressChange = (taskId: string, progress: number) => {
+    if (!requireEditPermission()) return;
     const safeProgress = Math.max(0, Math.min(100, Math.round(progress)));
     const nextTasks = tasks.map((task) => (task.id === taskId ? { ...task, progress: safeProgress } : task));
     syncState(projects, nextTasks, activeProjectId);
   };
 
   const handleTaskQuickUpdate = (taskId: string, patch: Partial<TaskItem>) => {
+    if (!requireEditPermission()) return;
     const nextTasks = tasks.map((task) => {
       if (task.id !== taskId) return task;
       const nextTask = { ...task, ...patch };
@@ -202,6 +375,7 @@ export const App = () => {
   };
 
   const handleInsertRoot = (preferredCategory?: string, mode: "task" | "category" = "task", anchorTaskId?: string) => {
+    if (!requireEditPermission()) return;
     const projectTasks = tasks.filter((task) => task.projectId === activeProjectId).sort((a, b) => a.order - b.order);
     const otherTasks = tasks.filter((task) => task.projectId !== activeProjectId);
     const fallbackDate = projectTasks[projectTasks.length - 1]?.endDate ?? new Date().toISOString().slice(0, 10);
@@ -288,7 +462,48 @@ export const App = () => {
     }
   };
 
+  const handleInsertChild = (parentTaskId: string) => {
+    if (!requireEditPermission()) return;
+    const parentTask = tasks.find((task) => task.id === parentTaskId && task.projectId === activeProjectId);
+    if (!parentTask) return;
+
+    const siblingOrders = tasks
+      .filter((task) => task.projectId === activeProjectId && task.parentId === parentTaskId)
+      .map((task) => task.order);
+    const nextOrder = siblingOrders.length > 0 ? Math.max(...siblingOrders) + 10 : parentTask.order + 1;
+
+    const fallbackDate = parentTask.endDate || new Date().toISOString().slice(0, 10);
+    const childTask = sanitizeTask({
+      id: `task-${uuidv4()}`,
+      projectId: activeProjectId,
+      parentId: parentTaskId,
+      isCategoryPlaceholder: false,
+      category: parentTask.category,
+      name: language === "zh" ? "新子任务" : "New Subtask",
+      startDate: parentTask.startDate || fallbackDate,
+      endDate: parentTask.endDate || fallbackDate,
+      duration: 1,
+      owner: language === "zh" ? "未分配" : "Unassigned",
+      progress: 0,
+      priority: "medium",
+      status: "not_started",
+      dependencyIds: [],
+      notes: "",
+      isMilestone: false,
+      order: nextOrder
+    });
+
+    syncState(projects, [...tasks, childTask], activeProjectId);
+    setCollapsedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.delete(parentTaskId);
+      return next;
+    });
+    setSelectedTaskId(childTask.id);
+  };
+
   const handleRenameCategory = (currentCategory: string, nextCategory: string) => {
+    if (!requireEditPermission()) return;
     const current = currentCategory.trim();
     const next = nextCategory.trim();
     if (!current || !next || current === next) return;
@@ -302,6 +517,7 @@ export const App = () => {
   };
 
   const handleTaskReorder = (activeTaskId: string, overTaskId: string) => {
+    if (!requireEditPermission()) return;
     if (!activeTaskId || !overTaskId || activeTaskId === overTaskId) return;
     const nextTasks = reorderTasks(tasks, activeProjectId, activeTaskId, overTaskId);
     syncState(projects, nextTasks, activeProjectId);
@@ -325,8 +541,29 @@ export const App = () => {
                 EN
               </button>
             </div>
-            <button className="btn btn-secondary" onClick={handleSaveAll} disabled={!hasUnsavedChanges}>
-              {hasUnsavedChanges ? t("saveChanges") : t("saved")}
+            {isRemoteStoreEnabled && !canEdit ? <span className="readonly-badge">{t("authReadonlyHint")}</span> : null}
+            {isRemoteStoreEnabled && currentUser ? (
+              <span className="user-chip" title={currentUser.email}>
+                {t("authSignedInAs")}: {currentUser.email || currentUser.id.slice(0, 8)}
+              </span>
+            ) : null}
+            {isRemoteStoreEnabled && !currentUser ? (
+              <>
+                <button className="btn btn-secondary" onClick={() => openAuthDialog("login")}>
+                  {t("login")}
+                </button>
+                <button className="btn btn-secondary" onClick={() => openAuthDialog("register")}>
+                  {t("register")}
+                </button>
+              </>
+            ) : null}
+            {isRemoteStoreEnabled && currentUser ? (
+              <button className="btn btn-secondary" onClick={() => void handleSignOut()}>
+                {t("logout")}
+              </button>
+            ) : null}
+            <button className="btn btn-secondary" onClick={() => void handleSaveAll()} disabled={!canEdit || !hasUnsavedChanges || isSaving}>
+              {isSaving ? (language === "zh" ? "保存中..." : "Saving...") : hasUnsavedChanges ? t("saveChanges") : t("saved")}
             </button>
             <select value={activeProjectId} onChange={(event) => setActiveProjectId(event.target.value)}>
               {projects.map((project) => (
@@ -335,7 +572,13 @@ export const App = () => {
                 </option>
               ))}
             </select>
-            <button className="btn btn-secondary" onClick={() => setProjectDialogOpen(true)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!requireEditPermission()) return;
+                setProjectDialogOpen(true);
+              }}
+            >
               {t("addProject")}
             </button>
           </div>
@@ -352,20 +595,44 @@ export const App = () => {
               selectedTaskId={selectedTaskId}
               viewMode={viewMode}
               columnWidth={zoom}
+              canEdit={canEdit}
               onSelectTask={setSelectedTaskId}
               onDateChange={handleTaskDateChange}
               onProgressChange={handleTaskProgressChange}
               onDeleteTask={handleTaskDelete}
               onInsertRoot={handleInsertRoot}
+              onInsertChild={handleInsertChild}
               onRenameCategory={handleRenameCategory}
               onReorderTask={handleTaskReorder}
               onToggleCollapse={handleToggleCollapse}
               onQuickUpdate={handleTaskQuickUpdate}
               collapsedTaskIds={collapsedTaskIds}
+              onRequireAuth={() => openAuthDialog("login")}
             />
           </section>
         </main>
       </div>
+
+      <AuthDialog
+        open={isAuthDialogOpen}
+        mode={authMode}
+        language={language}
+        email={authEmail}
+        password={authPassword}
+        loading={isAuthLoading}
+        errorMessage={authError}
+        successMessage={authSuccess}
+        t={t}
+        onClose={() => setAuthDialogOpen(false)}
+        onModeChange={(mode) => {
+          setAuthMode(mode);
+          setAuthError(undefined);
+          setAuthSuccess(undefined);
+        }}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onSubmit={() => void handleAuthSubmit()}
+      />
 
       <TaskFormDrawer
         language={language}
@@ -383,3 +650,4 @@ export const App = () => {
     </div>
   );
 };
+

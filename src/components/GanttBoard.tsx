@@ -28,16 +28,19 @@ interface GanttBoardProps {
   selectedTaskId?: string;
   viewMode: ViewModeOption;
   columnWidth: number;
+  canEdit: boolean;
   onSelectTask: (taskId: string) => void;
   onDateChange: (taskId: string, startDate: string, endDate: string) => void;
   onProgressChange: (taskId: string, progress: number) => void;
   onDeleteTask: (taskId: string) => void;
   onInsertRoot: (category?: string, mode?: "task" | "category", anchorTaskId?: string) => void;
+  onInsertChild: (parentTaskId: string) => void;
   onRenameCategory: (currentCategory: string, nextCategory: string) => void;
   onReorderTask: (activeTaskId: string, overTaskId: string) => void;
   onToggleCollapse: (taskId: string) => void;
   onQuickUpdate: (taskId: string, patch: Partial<TaskItem>) => void;
   collapsedTaskIds: Set<string>;
+  onRequireAuth?: () => void;
 }
 
 type LeftRow = { kind: "category"; category: string; blockKey: string; anchorTaskId?: string } | { kind: "task"; taskId: string };
@@ -87,18 +90,20 @@ export const GanttBoard = ({
   selectedTaskId,
   viewMode,
   columnWidth,
+  canEdit,
   onSelectTask,
   onDateChange,
   onProgressChange: _onProgressChange,
   onDeleteTask,
   onInsertRoot,
+  onInsertChild,
   onRenameCategory,
   onReorderTask,
   onToggleCollapse,
   onQuickUpdate,
-  collapsedTaskIds
+  collapsedTaskIds,
+  onRequireAuth
 }: GanttBoardProps) => {
-  const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
   const [listPanelWidth, setListPanelWidth] = useState<number>(680);
   const [ganttViewportHeight, setGanttViewportHeight] = useState<number>(420);
   const [leftScrollContentWidth, setLeftScrollContentWidth] = useState<number>(LIST_GRID_MIN_WIDTH);
@@ -202,17 +207,20 @@ export const GanttBoard = ({
   }, [tasks, language]);
 
   const commitCategoryRename = (currentCategory: string, inputValue: string) => {
+    if (!canEdit) {
+      onRequireAuth?.();
+      return;
+    }
     const nextCategory = inputValue.trim();
-    setCategoryDrafts((prev) => {
-      const next = { ...prev };
-      delete next[currentCategory];
-      return next;
-    });
     if (!nextCategory || nextCategory === currentCategory) return;
     onRenameCategory(currentCategory, nextCategory);
   };
 
   const commitInlineField = (task: TaskItem, field: "name" | "owner" | "startDate" | "endDate", value: string) => {
+    if (!canEdit) {
+      onRequireAuth?.();
+      return;
+    }
     const current = String(task[field] ?? "");
     if (value === current) return;
     onQuickUpdate(task.id, { [field]: value } as Partial<TaskItem>);
@@ -259,14 +267,14 @@ export const GanttBoard = ({
         progress: 0,
         type: "task",
         dependencies: [],
-        isDisabled: true,
         displayOrder: displayOrder++,
         styles: {
           backgroundColor: "transparent",
           backgroundSelectedColor: "transparent",
           progressColor: "transparent",
           progressSelectedColor: "transparent"
-        }
+        },
+        isDisabled: true
       });
 
       for (const item of categoryRows.filter((row) => !row.task.isCategoryPlaceholder)) {
@@ -287,13 +295,14 @@ export const GanttBoard = ({
             backgroundSelectedColor: "#005bab",
             progressColor: "#62aef0",
             progressSelectedColor: "#f2f9ff"
-          }
+          },
+          isDisabled: !canEdit
         });
       }
     });
 
     return rows;
-  }, [groupedRows, parentTaskIdSet, tasks, viewMode]);
+  }, [canEdit, groupedRows, parentTaskIdSet, tasks, viewMode]);
 
   useEffect(() => {
     const root = wrapperRef.current;
@@ -378,7 +387,18 @@ export const GanttBoard = ({
               >
                 <div className="gantt-left-cell">
                   <div className="task-name-header-cell">
-                    <button className="cell-mini-btn" onClick={() => onInsertRoot(undefined, "category")} title={t("insertRoot")}>
+                    <button
+                      className="cell-mini-btn"
+                      onClick={() => {
+                        if (!canEdit) {
+                          onRequireAuth?.();
+                          return;
+                        }
+                        onInsertRoot(undefined, "category");
+                      }}
+                      title={t("insertRoot")}
+                      disabled={!canEdit}
+                    >
                       +
                     </button>
                     <span>{t("taskName")}</span>
@@ -412,20 +432,22 @@ export const GanttBoard = ({
                           <div className="category-title-wrap">
                             <button
                               className="cell-mini-btn"
-                              onClick={() => onInsertRoot(category, "task", rowItem.anchorTaskId)}
+                              onClick={() => {
+                                if (!canEdit) {
+                                  onRequireAuth?.();
+                                  return;
+                                }
+                                onInsertRoot(category, "task", rowItem.anchorTaskId);
+                              }}
                               title={t("insertRow")}
+                              disabled={!canEdit}
                             >
                               +
                             </button>
                             <input
+                              key={`category-${rowItem.blockKey}-${category}`}
                               className="category-title-input"
-                              value={categoryDrafts[category] ?? category}
-                              onChange={(event) =>
-                                setCategoryDrafts((prev) => ({
-                                  ...prev,
-                                  [category]: event.target.value
-                                }))
-                              }
+                              defaultValue={category}
                               onKeyDown={(event) => {
                                 event.stopPropagation();
                                 if (event.key === "Enter") {
@@ -435,15 +457,12 @@ export const GanttBoard = ({
                                 }
                                 if (event.key === "Escape") {
                                   event.preventDefault();
-                                  setCategoryDrafts((prev) => {
-                                    const next = { ...prev };
-                                    delete next[category];
-                                    return next;
-                                  });
+                                  (event.target as HTMLInputElement).value = category;
                                   (event.target as HTMLInputElement).blur();
                                 }
                               }}
                               onBlur={(event) => commitCategoryRename(category, event.target.value)}
+                              readOnly={!canEdit}
                             />
                           </div>
                         </div>
@@ -478,11 +497,13 @@ export const GanttBoard = ({
                     className={`gantt-left-row ${isSelected ? "selected-row" : ""}`}
                     style={{ height: rowHeight }}
                     onDragOver={(event) => {
+                      if (!canEdit) return;
                       if (!draggingTaskId || draggingTaskId === id) return;
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
                     }}
                     onDrop={(event) => {
+                      if (!canEdit) return;
                       event.preventDefault();
                       const fromData = event.dataTransfer.getData("text/plain");
                       const activeId = draggingTaskId || fromData;
@@ -502,8 +523,14 @@ export const GanttBoard = ({
                             type="button"
                             className="row-drag-handle"
                             title={language === "zh" ? "拖动排序" : "Drag to reorder"}
-                            draggable
+                            disabled={!canEdit}
+                            draggable={canEdit}
                             onDragStart={(event) => {
+                              if (!canEdit) {
+                                event.preventDefault();
+                                onRequireAuth?.();
+                                return;
+                              }
                               event.stopPropagation();
                               setDraggingTaskId(id);
                               event.dataTransfer.effectAllowed = "move";
@@ -515,23 +542,40 @@ export const GanttBoard = ({
                           >
                             ::
                           </button>
-                          {hasChildren ? (
-                            <button
-                              type="button"
-                              className="icon-btn category-toggle"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onToggleCollapse(id);
-                              }}
-                              title={language === "zh" ? "\u6298\u53E0/\u5C55\u5F00" : "Expand / Collapse"}
-                            >
-                              {collapsedTaskIds.has(id) ? ">" : "v"}
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            className="icon-btn category-toggle"
+                            disabled={!hasChildren}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (!hasChildren) return;
+                              onToggleCollapse(id);
+                            }}
+                            title={language === "zh" ? "\u5b50\u4efb\u52a1\u5c55\u5f00/\u6536\u8d77" : "Expand/Collapse Subtasks"}
+                          >
+                            {hasChildren ? (collapsedTaskIds.has(id) ? ">" : "v") : "·"}
+                          </button>
+                          <button
+                            type="button"
+                            className="cell-mini-btn subtask-add-btn"
+                            disabled={!canEdit}
+                            title={language === "zh" ? "\u65b0\u589e\u5b50\u4efb\u52a1" : "Add subtask"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (!canEdit) {
+                                onRequireAuth?.();
+                                return;
+                              }
+                              onInsertChild(id);
+                            }}
+                          >
+                            +
+                          </button>
                           <input
                             key={`${id}-name-${visible.task.name}`}
                             className="inline-text"
                             defaultValue={visible.task.name}
+                            readOnly={!canEdit}
                             onMouseDown={(event) => event.stopPropagation()}
                             onClick={(event) => event.stopPropagation()}
                             onFocus={(event) => event.currentTarget.select()}
@@ -557,6 +601,7 @@ export const GanttBoard = ({
                           key={`${id}-owner-${visible.task.owner}`}
                           className="inline-text"
                           defaultValue={visible.task.owner}
+                          readOnly={!canEdit}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => event.stopPropagation()}
                           onFocus={(event) => event.currentTarget.select()}
@@ -580,10 +625,17 @@ export const GanttBoard = ({
                         <select
                           className="inline-select"
                           value={visible.task.status}
+                          disabled={!canEdit}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
-                          onChange={(event) => onQuickUpdate(id, { status: event.target.value as TaskItem["status"] })}
+                          onChange={(event) => {
+                            if (!canEdit) {
+                              onRequireAuth?.();
+                              return;
+                            }
+                            onQuickUpdate(id, { status: event.target.value as TaskItem["status"] });
+                          }}
                         >
                           <option value="not_started">{getStatusLabel(language, "not_started")}</option>
                           <option value="in_progress">{getStatusLabel(language, "in_progress")}</option>
@@ -597,6 +649,7 @@ export const GanttBoard = ({
                           type="date"
                           className="inline-date"
                           defaultValue={visible.task.startDate}
+                          disabled={!canEdit}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => {
@@ -621,6 +674,7 @@ export const GanttBoard = ({
                           type="date"
                           className="inline-date"
                           defaultValue={visible.task.endDate}
+                          disabled={!canEdit}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => {
@@ -644,8 +698,13 @@ export const GanttBoard = ({
                         <button
                           className="cell-delete-btn"
                           title={t("quickDelete")}
+                          disabled={!canEdit}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (!canEdit) {
+                              onRequireAuth?.();
+                              return;
+                            }
                             onDeleteTask(id);
                           }}
                         >
@@ -671,6 +730,10 @@ export const GanttBoard = ({
             onDateChange={(task) => {
               const id = String(task.id);
               if (isCategoryRowId(id)) return false;
+              if (!canEdit) {
+                onRequireAuth?.();
+                return false;
+              }
               onDateChange(id, toISODate(task.start), toISODate(task.end));
               return true;
             }}

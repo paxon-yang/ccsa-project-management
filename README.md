@@ -84,3 +84,69 @@ npm run preview
 - 本次封版将 UI 规范固定为 `v1.0`
 - 后续迭代请优先遵循 [UI_BASELINE_V1.md](./UI_BASELINE_V1.md)
 - 若需大改视觉风格，请先更新基线文档再改样式
+
+---
+
+## Shared Cloud Database (Supabase)
+
+This project now supports a shared backend store so multiple users can see the same data.
+
+### 1) Create table and policies
+
+Run SQL in your Supabase SQL editor:
+
+```sql
+-- file: supabase/schema.sql
+create table if not exists public.workspaces (
+  id text primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.workspaces enable row level security;
+
+drop policy if exists "workspace_read_all" on public.workspaces;
+create policy "workspace_read_all"
+on public.workspaces
+for select
+to anon
+using (true);
+
+drop policy if exists "workspace_write_all" on public.workspaces;
+create policy "workspace_write_all"
+on public.workspaces
+for insert
+to anon
+with check (true);
+
+drop policy if exists "workspace_update_all" on public.workspaces;
+create policy "workspace_update_all"
+on public.workspaces
+for update
+to anon
+using (true)
+with check (true);
+```
+
+### 2) Configure env vars
+
+Copy `.env.example` to `.env.local` and fill values:
+
+```bash
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_WORKSPACE_ID=tmm-main
+```
+
+### 3) Deploy on Vercel
+
+Set the same `VITE_...` variables in Vercel Project Settings -> Environment Variables.
+
+### 4) Save behavior
+
+- Edits are staged locally in memory.
+- Click `Save` to persist.
+- With Supabase configured, `Save` writes to:
+  - Supabase (shared data for all users)
+  - localStorage (local backup)
+- If Supabase is not configured, `Save` writes to localStorage only.
