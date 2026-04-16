@@ -47,14 +47,15 @@ interface GanttBoardProps {
 type LeftRow = { kind: "category"; category: string; blockKey: string; anchorTaskId?: string } | { kind: "task"; taskId: string };
 
 const CATEGORY_ROW_PREFIX = "__category_row__:";
-const LIST_GRID_TEMPLATE = "276px 140px 140px 150px 150px 72px 56px";
-const LIST_GRID_MIN_WIDTH = 1120;
-const LEFT_PANEL_RATIO = 0.42;
-const LEFT_PANEL_MIN_WIDTH = 520;
-const TITLE_ROW_HEIGHT = 48;
-const DATES_ROW_HEIGHT = 24;
-const HEADER_HEIGHT = TITLE_ROW_HEIGHT + DATES_ROW_HEIGHT; // 72: 行1=年月(48px) 行2=日期(24px)
-const CATEGORY_BAND_HEIGHT = 36;
+const LIST_GRID_TEMPLATE = "248px 128px 128px 134px 134px 64px 52px";
+const LIST_GRID_MIN_WIDTH = 980;
+const LEFT_PANEL_RATIO = 0.5;
+const LEFT_PANEL_MIN_WIDTH = 500;
+const TITLE_ROW_HEIGHT = 36;
+const DATES_ROW_HEIGHT = 20;
+const HEADER_HEIGHT = TITLE_ROW_HEIGHT + DATES_ROW_HEIGHT;
+const CATEGORY_BAND_HEIGHT = 33;
+const ROW_HEIGHT = 33;
 const TWO_DAY_STEP_MS = 2 * 24 * 60 * 60 * 1000;
 
 const statusColor = (status: TaskItem["status"]) => {
@@ -155,7 +156,7 @@ export const GanttBoard = ({
 
       const totalHeight = root.clientHeight;
       if (!totalHeight) return;
-      const nextGanttHeight = Math.max(260, totalHeight - HEADER_HEIGHT - 20);
+      const nextGanttHeight = Math.max(240, totalHeight - HEADER_HEIGHT - 18);
       setGanttViewportHeight((prev) => (prev === nextGanttHeight ? prev : nextGanttHeight));
     };
 
@@ -389,7 +390,7 @@ export const GanttBoard = ({
             locale={language === "zh" ? "zh-CN" : "en-US"}
             listCellWidth={`${listPanelWidth}px`}
             ganttHeight={ganttViewportHeight}
-            rowHeight={36}
+            rowHeight={ROW_HEIGHT}
             headerHeight={HEADER_HEIGHT}
             timeStep={TWO_DAY_STEP_MS}
             viewDate={normalizedViewStartDate}
@@ -574,7 +575,7 @@ export const GanttBoard = ({
                             }}
                             title={language === "zh" ? "\u5b50\u4efb\u52a1\u5c55\u5f00/\u6536\u8d77" : "Expand/Collapse Subtasks"}
                           >
-                            {hasChildren ? (collapsedTaskIds.has(id) ? ">" : "v") : "·"}
+                            {hasChildren ? (collapsedTaskIds.has(id) ? "▸" : "▾") : "·"}
                           </button>
                           <button
                             type="button"

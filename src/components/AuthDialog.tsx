@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+﻿import { FormEvent } from "react";
 import { TranslationKey } from "../i18n";
 import { Language } from "../types";
 
@@ -94,4 +94,5 @@ export const AuthDialog = ({
     </div>
   );
 };
+
 
