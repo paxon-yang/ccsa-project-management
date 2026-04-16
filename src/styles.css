@@ -256,6 +256,10 @@ button {
   flex: 1;
 }
 
+.timeline-start-input {
+  min-width: 138px;
+}
+
 .main-layout-dense {
   gap: 8px;
   min-height: 0;

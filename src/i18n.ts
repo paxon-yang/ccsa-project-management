@@ -94,6 +94,7 @@ const texts = {
     en: "No task to display. Create tasks or adjust filters."
   },
   project: { zh: "\u9879\u76ee", en: "Project" },
+  timelineStart: { zh: "\u65f6\u95f4\u8f74\u8d77\u70b9", en: "Timeline Start" },
   parentTask: { zh: "\u7236\u4efb\u52a1", en: "Parent Task" },
   none: { zh: "\u65e0", en: "None" },
   milestone: { zh: "\u8bbe\u4e3a\u91cc\u7a0b\u7891", en: "Milestone" },

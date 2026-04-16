@@ -11,7 +11,8 @@ export const defaultState: PersistedState = {
     {
       id: "project-ccsa-main",
       name: "TMM project",
-      description: "\u77ff\u4e95\u9879\u76ee\u6837\u4f8b\u8ba1\u5212\uff0c\u65f6\u95f4\u7a97\u53e3\uff1a2026-04-10 \u81f3 2029-12-31\uff08\u6587\u6863\u672a\u660e\u786e\u7684\u65e5\u671f\u5df2\u6309\u9ed8\u8ba4\u503c\u586b\u5145\uff09"
+      description: "\u77ff\u4e95\u9879\u76ee\u6837\u4f8b\u8ba1\u5212\uff0c\u65f6\u95f4\u7a97\u53e3\uff1a2026-04-10 \u81f3 2029-12-31\uff08\u6587\u6863\u672a\u660e\u786e\u7684\u65e5\u671f\u5df2\u6309\u9ed8\u8ba4\u503c\u586b\u5145\uff09",
+      timelineStartDate: "2026-04-01"
     }
   ],
   activeProjectId: "project-ccsa-main",

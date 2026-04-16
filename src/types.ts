@@ -9,6 +9,7 @@ export interface ProjectItem {
   id: string;
   name: string;
   description?: string;
+  timelineStartDate?: string;
 }
 
 export interface TaskItem {

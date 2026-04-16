@@ -28,6 +28,7 @@ interface GanttBoardProps {
   selectedTaskId?: string;
   viewMode: ViewModeOption;
   columnWidth: number;
+  viewStartDate: string;
   canEdit: boolean;
   onSelectTask: (taskId: string) => void;
   onDateChange: (taskId: string, startDate: string, endDate: string) => void;
@@ -90,6 +91,7 @@ export const GanttBoard = ({
   selectedTaskId,
   viewMode,
   columnWidth,
+  viewStartDate,
   canEdit,
   onSelectTask,
   onDateChange,
@@ -190,6 +192,23 @@ export const GanttBoard = ({
 
   const taskMap = useMemo(() => new Map(tasks.map((row) => [row.task.id, row])), [tasks]);
   const parentTaskIdSet = useMemo(() => new Set(tasks.map((row) => row.task.parentId).filter(Boolean) as string[]), [tasks]);
+  const normalizedViewStartDate = useMemo(() => {
+    const safe = /^\d{4}-\d{2}-\d{2}$/.test(viewStartDate) ? viewStartDate : "2026-04-01";
+    const date = new Date(`${safe}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? new Date("2026-04-01T00:00:00") : date;
+  }, [viewStartDate]);
+  const preStepsCount = useMemo(() => {
+    if (tasks.length === 0) return 1;
+    const earliestTaskStart = tasks.reduce((earliest, row) => {
+      const current = toDate(row.task.startDate);
+      return current < earliest ? current : earliest;
+    }, toDate(tasks[0].task.startDate));
+
+    if (earliestTaskStart <= normalizedViewStartDate) return 1;
+    const oneDay = 24 * 60 * 60 * 1000;
+    const gapDays = Math.ceil((earliestTaskStart.getTime() - normalizedViewStartDate.getTime()) / oneDay);
+    return Math.max(1, gapDays + 2);
+  }, [tasks, normalizedViewStartDate]);
 
   const groupedRows = useMemo(() => {
     const blocks: Array<{ category: string; rows: VisibleTask[] }> = [];
@@ -373,6 +392,8 @@ export const GanttBoard = ({
             rowHeight={36}
             headerHeight={HEADER_HEIGHT}
             timeStep={TWO_DAY_STEP_MS}
+            viewDate={normalizedViewStartDate}
+            preStepsCount={preStepsCount}
             TaskListHeader={({ headerHeight, rowWidth }) => (
               <div
                 ref={leftHeaderScrollRef}

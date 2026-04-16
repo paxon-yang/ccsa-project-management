@@ -26,6 +26,7 @@ const LEGACY_STORAGE_KEYS = ["ccsa-project-management-state-v1"];
 const LANGUAGE_KEY = "ccsa-project-management-language";
 const LEGACY_PROJECT_NAME = "CCSA主项目 / CCSA Main Project";
 const TARGET_PROJECT_NAME = "TMM project";
+const DEFAULT_TIMELINE_START = "2026-04-01";
 
 const normalizeStatus = (value: unknown): TaskItem["status"] => {
   if (value === "not_started" || value === "\u672a\u5f00\u59cb") return "not_started";
@@ -48,11 +49,24 @@ const normalizeCategory = (task: Partial<TaskItem>): string => {
   return "General";
 };
 
+const normalizeTimelineStartDate = (value: unknown): string => {
+  if (typeof value !== "string") return DEFAULT_TIMELINE_START;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return DEFAULT_TIMELINE_START;
+  const timestamp = new Date(`${trimmed}T00:00:00`).getTime();
+  return Number.isNaN(timestamp) ? DEFAULT_TIMELINE_START : trimmed;
+};
+
 const normalizePersistedState = (parsed: PersistedState): PersistedState => ({
   ...parsed,
-  projects: parsed.projects.map((project) =>
-    project.name === LEGACY_PROJECT_NAME ? { ...project, name: TARGET_PROJECT_NAME } : project
-  ),
+  projects: parsed.projects.map((project) => {
+    const name = project.name === LEGACY_PROJECT_NAME ? TARGET_PROJECT_NAME : project.name;
+    return {
+      ...project,
+      name,
+      timelineStartDate: normalizeTimelineStartDate(project.timelineStartDate)
+    };
+  }),
   tasks: (parsed.tasks ?? []).map((task) => ({
     ...task,
     status: normalizeStatus(task.status),
@@ -126,6 +140,11 @@ export const App = () => {
 
   const t = createTranslator(language);
   const canEdit = !isRemoteStoreEnabled || Boolean(currentUser);
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId),
+    [projects, activeProjectId]
+  );
+  const activeTimelineStartDate = activeProject?.timelineStartDate ?? DEFAULT_TIMELINE_START;
 
   const visibleTasks = useMemo(
     () => getVisibleTasks(tasks, activeProjectId, collapsedTaskIds, searchText, filters, sortBy),
@@ -285,10 +304,24 @@ export const App = () => {
 
   const handleProjectCreate = (name: string, description: string) => {
     if (!requireEditPermission()) return;
-    const newProject = { id: `project-${uuidv4()}`, name, description };
+    const newProject = {
+      id: `project-${uuidv4()}`,
+      name,
+      description,
+      timelineStartDate: activeTimelineStartDate || DEFAULT_TIMELINE_START
+    };
     const nextProjects = [...projects, newProject];
     syncState(nextProjects, tasks, newProject.id);
     setProjectDialogOpen(false);
+  };
+
+  const handleTimelineStartDateChange = (nextDate: string) => {
+    if (!requireEditPermission()) return;
+    const normalized = normalizeTimelineStartDate(nextDate);
+    const nextProjects = projects.map((project) =>
+      project.id === activeProjectId ? { ...project, timelineStartDate: normalized } : project
+    );
+    syncState(nextProjects, tasks, activeProjectId);
   };
 
   const handleTaskSubmit = (task: TaskItem) => {
@@ -572,6 +605,15 @@ export const App = () => {
                 </option>
               ))}
             </select>
+            <input
+              type="date"
+              className="input timeline-start-input"
+              value={activeTimelineStartDate}
+              title={t("timelineStart")}
+              aria-label={t("timelineStart")}
+              disabled={!canEdit || !activeProjectId}
+              onChange={(event) => handleTimelineStartDateChange(event.target.value)}
+            />
             <button
               className="btn btn-secondary"
               onClick={() => {
@@ -595,6 +637,7 @@ export const App = () => {
               selectedTaskId={selectedTaskId}
               viewMode={viewMode}
               columnWidth={zoom}
+              viewStartDate={activeTimelineStartDate}
               canEdit={canEdit}
               onSelectTask={setSelectedTaskId}
               onDateChange={handleTaskDateChange}
