@@ -293,24 +293,14 @@ export const App = () => {
   const [isProjectDialogOpen, setProjectDialogOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string>();
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(new Set());
-  const [isPermissionPanelOpen, setPermissionPanelOpen] = useState(false);
+  const [isSettingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
   const [permissionEmail, setPermissionEmail] = useState("");
   const [permissionRole, setPermissionRole] = useState<ProjectRole>("viewer");
-  const permissionPanelRef = useRef<HTMLDivElement>(null);
-  const [isAuditPanelOpen, setAuditPanelOpen] = useState(false);
-  const auditPanelRef = useRef<HTMLDivElement>(null);
-  const [isRevisionPanelOpen, setRevisionPanelOpen] = useState(false);
-  const revisionPanelRef = useRef<HTMLDivElement>(null);
-  const [isBaselinePanelOpen, setBaselinePanelOpen] = useState(false);
-  const baselinePanelRef = useRef<HTMLDivElement>(null);
   const [isRiskPanelOpen, setRiskPanelOpen] = useState(false);
   const riskPanelRef = useRef<HTMLDivElement>(null);
   const [isDashboardPanelOpen, setDashboardPanelOpen] = useState(false);
   const dashboardPanelRef = useRef<HTMLDivElement>(null);
-  const [isTemplatePanelOpen, setTemplatePanelOpen] = useState(false);
-  const templatePanelRef = useRef<HTMLDivElement>(null);
-  const [isNotifyPanelOpen, setNotifyPanelOpen] = useState(false);
-  const notifyPanelRef = useRef<HTMLDivElement>(null);
   const [notifyEmail, setNotifyEmail] = useState("");
   const [isSendingNotify, setSendingNotify] = useState(false);
   const [notifyResult, setNotifyResult] = useState<string>();
@@ -599,48 +589,15 @@ export const App = () => {
   }, [hasUnsavedChanges]);
 
   useEffect(() => {
-    if (!isPermissionPanelOpen) return;
+    if (!isSettingsPanelOpen) return;
     const onWindowMouseDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (permissionPanelRef.current?.contains(target)) return;
-      setPermissionPanelOpen(false);
+      if (settingsPanelRef.current?.contains(target)) return;
+      setSettingsPanelOpen(false);
     };
     window.addEventListener("mousedown", onWindowMouseDown);
     return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isPermissionPanelOpen]);
-
-  useEffect(() => {
-    if (!isAuditPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (auditPanelRef.current?.contains(target)) return;
-      setAuditPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isAuditPanelOpen]);
-
-  useEffect(() => {
-    if (!isRevisionPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (revisionPanelRef.current?.contains(target)) return;
-      setRevisionPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isRevisionPanelOpen]);
-
-  useEffect(() => {
-    if (!isBaselinePanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (baselinePanelRef.current?.contains(target)) return;
-      setBaselinePanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isBaselinePanelOpen]);
+  }, [isSettingsPanelOpen]);
 
   useEffect(() => {
     if (!isRiskPanelOpen) return;
@@ -665,28 +622,6 @@ export const App = () => {
   }, [isDashboardPanelOpen]);
 
   useEffect(() => {
-    if (!isTemplatePanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (templatePanelRef.current?.contains(target)) return;
-      setTemplatePanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isTemplatePanelOpen]);
-
-  useEffect(() => {
-    if (!isNotifyPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (notifyPanelRef.current?.contains(target)) return;
-      setNotifyPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isNotifyPanelOpen]);
-
-  useEffect(() => {
     if (!isExportPanelOpen) return;
     const onWindowMouseDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -698,14 +633,9 @@ export const App = () => {
   }, [isExportPanelOpen]);
 
   useEffect(() => {
-    setPermissionPanelOpen(false);
-    setAuditPanelOpen(false);
-    setRevisionPanelOpen(false);
-    setBaselinePanelOpen(false);
+    setSettingsPanelOpen(false);
     setRiskPanelOpen(false);
     setDashboardPanelOpen(false);
-    setTemplatePanelOpen(false);
-    setNotifyPanelOpen(false);
     setExportPanelOpen(false);
     setNotifyResult(undefined);
   }, [activeProjectId, normalizedUserEmail]);
@@ -984,7 +914,7 @@ export const App = () => {
       data: restored,
       baseRevisions: revisions
     });
-    setRevisionPanelOpen(false);
+    setSettingsPanelOpen(false);
   };
 
   const handleSetProjectBaseline = () => {
@@ -1067,7 +997,7 @@ export const App = () => {
     }
 
     syncState(projects, [...otherTasks, ...merged], activeProjectId, projectPermissions, auditLogs, revisions);
-    setTemplatePanelOpen(false);
+    setSettingsPanelOpen(false);
     window.alert(language === "zh" ? "模板任务已创建。" : "Template tasks created.");
   };
 
@@ -1712,170 +1642,250 @@ export const App = () => {
                 {t("projectRole")}: {getRoleLabel(currentProjectRole)}
               </span>
             ) : null}
-            {isRemoteStoreEnabled && !currentUser ? (
-              <>
-                <button className="btn btn-secondary" onClick={() => openAuthDialog("login")}>
-                  {t("login")}
-                </button>
-                <button className="btn btn-secondary" onClick={() => openAuthDialog("register")}>
-                  {t("register")}
-                </button>
-              </>
-            ) : null}
-            {isRemoteStoreEnabled && currentUser ? (
-              <button className="btn btn-secondary" onClick={() => void handleSignOut()}>
-                {t("logout")}
+            <div ref={settingsPanelRef} className="settings-panel-wrap">
+              <button className="btn btn-secondary" onClick={() => setSettingsPanelOpen((prev) => !prev)}>
+                {language === "zh" ? "设置" : "Settings"}
               </button>
-            ) : null}
-            {isRemoteStoreEnabled && currentUser ? (
-              <div ref={permissionPanelRef} className="permission-panel-wrap">
-                <button className="btn btn-secondary" onClick={() => setPermissionPanelOpen((prev) => !prev)}>
-                  {t("managePermissions")}
-                </button>
-                {isPermissionPanelOpen ? (
-                  <div className="permission-panel">
-                    <div className="permission-panel-list">
-                      {activeProjectPermissions.length === 0 ? (
-                        <div className="permission-empty">{t("noProjectMembers")}</div>
+              {isSettingsPanelOpen ? (
+                <div className="settings-panel">
+                  <details className="settings-group" open>
+                    <summary>{language === "zh" ? "账号" : "Account"}</summary>
+                    <div className="settings-group-body">
+                      {isRemoteStoreEnabled ? (
+                        currentUser ? (
+                          <button className="btn btn-secondary settings-inline-btn" onClick={() => void handleSignOut()}>
+                            {t("logout")}
+                          </button>
+                        ) : (
+                          <div className="settings-inline-actions">
+                            <button className="btn btn-secondary settings-inline-btn" onClick={() => openAuthDialog("login")}>
+                              {t("login")}
+                            </button>
+                            <button className="btn btn-secondary settings-inline-btn" onClick={() => openAuthDialog("register")}>
+                              {t("register")}
+                            </button>
+                          </div>
+                        )
                       ) : (
-                        activeProjectPermissions
-                          .slice()
-                          .sort((a, b) => a.email.localeCompare(b.email))
-                          .map((item) => (
-                            <div key={`${item.projectId}:${item.email}`} className="permission-row">
-                              <span className="permission-email">{item.email}</span>
-                              {canManagePermissions ? (
-                                <select
-                                  className="permission-role-select"
-                                  value={item.role}
-                                  onChange={(event) => handleRoleChange(item.email, event.target.value as ProjectRole)}
-                                >
-                                  <option value="admin">{t("roleAdmin")}</option>
-                                  <option value="editor">{t("roleEditor")}</option>
-                                  <option value="viewer">{t("roleViewer")}</option>
-                                </select>
-                              ) : (
-                                <span className="permission-role-label">{getRoleLabel(item.role)}</span>
-                              )}
-                              {canManagePermissions ? (
-                                <button className="btn btn-ghost permission-remove-btn" onClick={() => handleRemovePermission(item.email)}>
-                                  {t("remove")}
-                                </button>
-                              ) : null}
-                            </div>
-                          ))
+                        <div className="permission-empty">{language === "zh" ? "当前为本地模式" : "Local mode is active."}</div>
                       )}
                     </div>
-                    {canManagePermissions ? (
-                      <div className="permission-panel-create">
-                        <input
-                          className="input permission-email-input"
-                          value={permissionEmail}
-                          placeholder={t("permissionEmailPlaceholder")}
-                          onChange={(event) => setPermissionEmail(event.target.value)}
-                        />
-                        <select value={permissionRole} onChange={(event) => setPermissionRole(event.target.value as ProjectRole)}>
-                          <option value="admin">{t("roleAdmin")}</option>
-                          <option value="editor">{t("roleEditor")}</option>
-                          <option value="viewer">{t("roleViewer")}</option>
-                        </select>
-                        <button className="btn btn-primary permission-add-btn" onClick={handleUpsertPermission}>
-                          {t("addOrUpdateRole")}
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{t("managePermissions")}</summary>
+                    <div className="settings-group-body">
+                      {isRemoteStoreEnabled && currentUser ? (
+                        <>
+                          <div className="permission-panel-list settings-scroll-list">
+                            {activeProjectPermissions.length === 0 ? (
+                              <div className="permission-empty">{t("noProjectMembers")}</div>
+                            ) : (
+                              activeProjectPermissions
+                                .slice()
+                                .sort((a, b) => a.email.localeCompare(b.email))
+                                .map((item) => (
+                                  <div key={`${item.projectId}:${item.email}`} className="permission-row">
+                                    <span className="permission-email">{item.email}</span>
+                                    {canManagePermissions ? (
+                                      <select
+                                        className="permission-role-select"
+                                        value={item.role}
+                                        onChange={(event) => handleRoleChange(item.email, event.target.value as ProjectRole)}
+                                      >
+                                        <option value="admin">{t("roleAdmin")}</option>
+                                        <option value="editor">{t("roleEditor")}</option>
+                                        <option value="viewer">{t("roleViewer")}</option>
+                                      </select>
+                                    ) : (
+                                      <span className="permission-role-label">{getRoleLabel(item.role)}</span>
+                                    )}
+                                    {canManagePermissions ? (
+                                      <button className="btn btn-ghost permission-remove-btn" onClick={() => handleRemovePermission(item.email)}>
+                                        {t("remove")}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                          {canManagePermissions ? (
+                            <div className="permission-panel-create settings-form-row">
+                              <input
+                                className="input permission-email-input"
+                                value={permissionEmail}
+                                placeholder={t("permissionEmailPlaceholder")}
+                                onChange={(event) => setPermissionEmail(event.target.value)}
+                              />
+                              <select value={permissionRole} onChange={(event) => setPermissionRole(event.target.value as ProjectRole)}>
+                                <option value="admin">{t("roleAdmin")}</option>
+                                <option value="editor">{t("roleEditor")}</option>
+                                <option value="viewer">{t("roleViewer")}</option>
+                              </select>
+                              <button className="btn btn-primary permission-add-btn" onClick={handleUpsertPermission}>
+                                {t("addOrUpdateRole")}
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="permission-empty">{language === "zh" ? "请先登录后管理权限" : "Sign in to manage permissions."}</div>
+                      )}
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "审计日志" : "Audit Log"}</summary>
+                    <div className="settings-group-body">
+                      {isRemoteStoreEnabled ? (
+                        <div className="settings-scroll-list">
+                          {activeProjectAuditLogs.length === 0 ? (
+                            <div className="permission-empty">{language === "zh" ? "暂无审计记录" : "No audit entries yet"}</div>
+                          ) : (
+                            activeProjectAuditLogs.map((entry) => (
+                              <div key={entry.id} className="audit-row">
+                                <div className="audit-row-main">
+                                  <span className="audit-task-name">{entry.taskName}</span>
+                                  <span className="audit-field">{getAuditFieldLabel(entry.field)}</span>
+                                </div>
+                                <div className="audit-row-meta">
+                                  <span className="audit-before">{entry.before}</span>
+                                  <span className="audit-arrow">→</span>
+                                  <span className="audit-after">{entry.after}</span>
+                                </div>
+                                <div className="audit-row-foot">
+                                  <span>{entry.changedBy}</span>
+                                  <span>{new Date(entry.changedAt).toLocaleString(language === "zh" ? "zh-CN" : "en-US")}</span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ) : (
+                        <div className="permission-empty">{language === "zh" ? "云端模式下可用" : "Available in cloud mode."}</div>
+                      )}
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "版本回滚" : "Version Rollback"}</summary>
+                    <div className="settings-group-body">
+                      <div className="settings-scroll-list">
+                        {activeProjectRevisions.length === 0 ? (
+                          <div className="permission-empty">{language === "zh" ? "暂无可回滚版本" : "No revisions yet"}</div>
+                        ) : (
+                          activeProjectRevisions.map((revision) => (
+                            <div key={revision.id} className="revision-row">
+                              <div className="revision-row-main">
+                                <span className="revision-trigger">{revision.trigger.toUpperCase()}</span>
+                                <span className="revision-meta-user">{revision.createdBy}</span>
+                              </div>
+                              <div className="revision-row-foot">
+                                <span>{new Date(revision.createdAt).toLocaleString(language === "zh" ? "zh-CN" : "en-US")}</span>
+                                <button className="btn btn-ghost revision-restore-btn" onClick={() => void handleRestoreRevision(revision.id)}>
+                                  {language === "zh" ? "回滚到此版本" : "Restore"}
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "基线对比" : "Baseline"}</summary>
+                    <div className="settings-group-body">
+                      <div className="baseline-panel-head settings-inline-head">
+                        <span>{language === "zh" ? "计划基线 vs 实际" : "Baseline vs Actual"}</span>
+                        <button className="btn btn-ghost baseline-reset-btn" onClick={handleSetProjectBaseline}>
+                          {language === "zh" ? "设为新基线" : "Set New Baseline"}
                         </button>
                       </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {isRemoteStoreEnabled ? (
-              <div ref={auditPanelRef} className="audit-panel-wrap">
-                <button className="btn btn-secondary" onClick={() => setAuditPanelOpen((prev) => !prev)}>
-                  {language === "zh" ? "审计日志" : "Audit Log"}
-                </button>
-                {isAuditPanelOpen ? (
-                  <div className="audit-panel">
-                    {activeProjectAuditLogs.length === 0 ? (
-                      <div className="permission-empty">{language === "zh" ? "暂无审计记录" : "No audit entries yet"}</div>
-                    ) : (
-                      activeProjectAuditLogs.map((entry) => (
-                        <div key={entry.id} className="audit-row">
-                          <div className="audit-row-main">
-                            <span className="audit-task-name">{entry.taskName}</span>
-                            <span className="audit-field">{getAuditFieldLabel(entry.field)}</span>
-                          </div>
-                          <div className="audit-row-meta">
-                            <span className="audit-before">{entry.before}</span>
-                            <span className="audit-arrow">→</span>
-                            <span className="audit-after">{entry.after}</span>
-                          </div>
-                          <div className="audit-row-foot">
-                            <span>{entry.changedBy}</span>
-                            <span>{new Date(entry.changedAt).toLocaleString(language === "zh" ? "zh-CN" : "en-US")}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <div ref={revisionPanelRef} className="revision-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setRevisionPanelOpen((prev) => !prev)}>
-                {language === "zh" ? "版本回滚" : "Version Rollback"}
-              </button>
-              {isRevisionPanelOpen ? (
-                <div className="revision-panel">
-                  {activeProjectRevisions.length === 0 ? (
-                    <div className="permission-empty">{language === "zh" ? "暂无可回滚版本" : "No revisions yet"}</div>
-                  ) : (
-                    activeProjectRevisions.map((revision) => (
-                      <div key={revision.id} className="revision-row">
-                        <div className="revision-row-main">
-                          <span className="revision-trigger">{revision.trigger.toUpperCase()}</span>
-                          <span className="revision-meta-user">{revision.createdBy}</span>
-                        </div>
-                        <div className="revision-row-foot">
-                          <span>{new Date(revision.createdAt).toLocaleString(language === "zh" ? "zh-CN" : "en-US")}</span>
-                          <button className="btn btn-ghost revision-restore-btn" onClick={() => void handleRestoreRevision(revision.id)}>
-                            {language === "zh" ? "回滚到此版本" : "Restore"}
-                          </button>
-                        </div>
+                      <div className="settings-scroll-list">
+                        {baselineDiffRows.length === 0 ? (
+                          <div className="permission-empty">{language === "zh" ? "当前无偏差任务" : "No variance detected"}</div>
+                        ) : (
+                          baselineDiffRows.map((row) => (
+                            <div key={row.taskId} className="baseline-row">
+                              <div className="baseline-row-name">{row.taskName}</div>
+                              <div className="baseline-row-dates">
+                                <span>{`${row.baselineStart} ~ ${row.baselineEnd}`}</span>
+                                <span>{`${row.actualStart} ~ ${row.actualEnd}`}</span>
+                              </div>
+                              <div className="baseline-row-diff">
+                                <span>{language === "zh" ? "开工偏差" : "Start"}: {row.startDiff > 0 ? `+${row.startDiff}` : row.startDiff}d</span>
+                                <span>{language === "zh" ? "完工偏差" : "Finish"}: {row.endDiff > 0 ? `+${row.endDiff}` : row.endDiff}d</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div ref={baselinePanelRef} className="baseline-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setBaselinePanelOpen((prev) => !prev)}>
-                {language === "zh" ? "基线对比" : "Baseline"}
-              </button>
-              {isBaselinePanelOpen ? (
-                <div className="baseline-panel">
-                  <div className="baseline-panel-head">
-                    <span>{language === "zh" ? "计划基线 vs 实际" : "Baseline vs Actual"}</span>
-                    <button className="btn btn-ghost baseline-reset-btn" onClick={handleSetProjectBaseline}>
-                      {language === "zh" ? "设为新基线" : "Set New Baseline"}
-                    </button>
-                  </div>
-                  {baselineDiffRows.length === 0 ? (
-                    <div className="permission-empty">{language === "zh" ? "当前无偏差任务" : "No variance detected"}</div>
-                  ) : (
-                    baselineDiffRows.map((row) => (
-                      <div key={row.taskId} className="baseline-row">
-                        <div className="baseline-row-name">{row.taskName}</div>
-                        <div className="baseline-row-dates">
-                          <span>{`${row.baselineStart} ~ ${row.baselineEnd}`}</span>
-                          <span>{`${row.actualStart} ~ ${row.actualEnd}`}</span>
-                        </div>
-                        <div className="baseline-row-diff">
-                          <span>{language === "zh" ? "开工偏差" : "Start"}: {row.startDiff > 0 ? `+${row.startDiff}` : row.startDiff}d</span>
-                          <span>{language === "zh" ? "完工偏差" : "Finish"}: {row.endDiff > 0 ? `+${row.endDiff}` : row.endDiff}d</span>
-                        </div>
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "模板任务包" : "Templates"}</summary>
+                    <div className="settings-group-body">
+                      <div className="settings-scroll-list">
+                        {PROJECT_TEMPLATES.map((tpl) => (
+                          <div key={tpl.id} className="template-row">
+                            <div className="template-row-main">{tpl.title}</div>
+                            <div className="template-row-desc">{tpl.description}</div>
+                            <div className="template-row-foot">
+                              <span>{language === "zh" ? `${tpl.tasks.length} 个任务` : `${tpl.tasks.length} tasks`}</span>
+                              <button className="btn btn-ghost template-apply-btn" onClick={() => handleApplyTemplate(tpl.id)}>
+                                {language === "zh" ? "应用模板" : "Apply"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))
-                  )}
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "邮件通知" : "Email Alerts"}</summary>
+                    <div className="settings-group-body">
+                      <div className="notify-summary">
+                        {language === "zh"
+                          ? `延期/逾期 ${projectNotificationSummary.delayed.length}，即将开始 ${projectNotificationSummary.upcoming.length}`
+                          : `${projectNotificationSummary.delayed.length} delayed, ${projectNotificationSummary.upcoming.length} upcoming`}
+                      </div>
+                      <input
+                        className="input notify-email-input"
+                        value={notifyEmail}
+                        placeholder={language === "zh" ? "收件人邮箱" : "Recipient email"}
+                        onChange={(event) => setNotifyEmail(event.target.value)}
+                      />
+                      <div className="notify-panel-actions">
+                        <button
+                          className="btn btn-ghost notify-action-btn"
+                          onClick={() => void sendProjectNotificationEmail("summary")}
+                          disabled={isSendingNotify}
+                        >
+                          {isSendingNotify ? (language === "zh" ? "发送中..." : "Sending...") : language === "zh" ? "发送风险汇总" : "Send Summary"}
+                        </button>
+                        <button
+                          className="btn btn-ghost notify-action-btn"
+                          onClick={() => void sendProjectNotificationEmail("test")}
+                          disabled={isSendingNotify}
+                        >
+                          {language === "zh" ? "发送测试邮件" : "Send Test"}
+                        </button>
+                      </div>
+                      {notifyResult ? <div className="notify-result">{notifyResult}</div> : null}
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "导入" : "Import"}</summary>
+                    <div className="settings-group-body">
+                      <button className="btn btn-secondary settings-inline-btn" disabled={!canEdit || isImporting} onClick={() => fileInputRef.current?.click()}>
+                        {isImporting ? (language === "zh" ? "导入中..." : "Importing...") : language === "zh" ? "Excel导入" : "Import Excel"}
+                      </button>
+                    </div>
+                  </details>
                 </div>
               ) : null}
             </div>
@@ -1998,67 +2008,6 @@ export const App = () => {
                 </div>
               ) : null}
             </div>
-            <div ref={templatePanelRef} className="template-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setTemplatePanelOpen((prev) => !prev)}>
-                {language === "zh" ? "模板任务包" : "Templates"}
-              </button>
-              {isTemplatePanelOpen ? (
-                <div className="template-panel">
-                  {PROJECT_TEMPLATES.map((tpl) => (
-                    <div key={tpl.id} className="template-row">
-                      <div className="template-row-main">{tpl.title}</div>
-                      <div className="template-row-desc">{tpl.description}</div>
-                      <div className="template-row-foot">
-                        <span>{language === "zh" ? `${tpl.tasks.length} 个任务` : `${tpl.tasks.length} tasks`}</span>
-                        <button className="btn btn-ghost template-apply-btn" onClick={() => handleApplyTemplate(tpl.id)}>
-                          {language === "zh" ? "应用模板" : "Apply"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div ref={notifyPanelRef} className="notify-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setNotifyPanelOpen((prev) => !prev)} disabled={!canEdit}>
-                {language === "zh" ? "邮件通知" : "Email Alerts"}
-              </button>
-              {isNotifyPanelOpen ? (
-                <div className="notify-panel">
-                  <div className="notify-summary">
-                    {language === "zh"
-                      ? `延期/逾期 ${projectNotificationSummary.delayed.length}，即将开始 ${projectNotificationSummary.upcoming.length}`
-                      : `${projectNotificationSummary.delayed.length} delayed, ${projectNotificationSummary.upcoming.length} upcoming`}
-                  </div>
-                  <input
-                    className="input notify-email-input"
-                    value={notifyEmail}
-                    placeholder={language === "zh" ? "收件人邮箱" : "Recipient email"}
-                    onChange={(event) => setNotifyEmail(event.target.value)}
-                  />
-                  <div className="notify-panel-actions">
-                    <button
-                      className="btn btn-ghost notify-action-btn"
-                      onClick={() => void sendProjectNotificationEmail("summary")}
-                      disabled={isSendingNotify}
-                    >
-                      {isSendingNotify ? (language === "zh" ? "发送中..." : "Sending...") : language === "zh" ? "发送风险汇总" : "Send Summary"}
-                    </button>
-                    <button
-                      className="btn btn-ghost notify-action-btn"
-                      onClick={() => void sendProjectNotificationEmail("test")}
-                      disabled={isSendingNotify}
-                    >
-                      {language === "zh" ? "发送测试邮件" : "Send Test"}
-                    </button>
-                  </div>
-                  {notifyResult ? <div className="notify-result">{notifyResult}</div> : null}
-                </div>
-              ) : null}
-            </div>
-            <button className="btn btn-secondary" disabled={!canEdit || isImporting} onClick={() => fileInputRef.current?.click()}>
-              {isImporting ? (language === "zh" ? "导入中..." : "Importing...") : language === "zh" ? "Excel导入" : "Import Excel"}
-            </button>
             <div ref={exportPanelRef} className="export-panel-wrap">
               <button className="btn btn-secondary" onClick={() => setExportPanelOpen((prev) => !prev)} disabled={isExporting}>
                 {isExporting ? (language === "zh" ? "导出中..." : "Exporting...") : language === "zh" ? "周报导出" : "Weekly Export"}

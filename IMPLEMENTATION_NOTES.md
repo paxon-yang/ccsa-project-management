@@ -110,3 +110,16 @@
   - not-started remains gray family
   - delayed remains amber family
 - Delay risk highlighting still takes precedence (red risk bars stay dominant).
+
+### 2026-04-17 Step UI-Settings Consolidation Completed
+- Consolidated header utility actions into one `设置 / Settings` panel.
+- Moved these actions into settings:
+  - Login / Logout
+  - Permissions
+  - Audit Log
+  - Version Rollback
+  - Baseline
+  - Templates
+  - Email Alerts
+  - Import Excel
+- Kept existing behavior/logic unchanged; only interaction entry was reorganized.
