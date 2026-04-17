@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getPriorityLabel, getStatusLabel } from "../i18n";
 import { Language, ProjectItem, TaskItem } from "../types";
 import { calcDuration, normalizeDates } from "../utils/date";
+import { isEndBeforeStart } from "../utils/taskValidation";
 
 interface TaskFormDrawerProps {
   language: Language;
@@ -31,6 +32,7 @@ interface TaskFormDrawerProps {
       | "ownerRequired"
       | "progressInvalid"
       | "parentInvalid"
+      | "dateRangeInvalid"
   ) => string;
   open: boolean;
   mode: "create" | "edit";
@@ -123,6 +125,10 @@ export const TaskFormDrawer = ({
       setError(t("parentInvalid"));
       return;
     }
+    if (!formState.isMilestone && isEndBeforeStart(formState.startDate, formState.endDate)) {
+      setError(t("dateRangeInvalid"));
+      return;
+    }
 
     const normalized = normalizeDates(formState.startDate, formState.endDate);
     const nextTask: TaskItem = {
@@ -133,6 +139,8 @@ export const TaskFormDrawer = ({
       name: formState.name.trim(),
       startDate: normalized.startDate,
       endDate: formState.isMilestone ? normalized.startDate : normalized.endDate,
+      baselineStartDate: initialTask?.baselineStartDate,
+      baselineEndDate: initialTask?.baselineEndDate,
       duration: formState.isMilestone ? 1 : calcDuration(normalized.startDate, normalized.endDate),
       owner: formState.owner.trim(),
       progress: progress,

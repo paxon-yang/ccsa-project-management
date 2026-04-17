@@ -22,6 +22,8 @@ export interface TaskItem {
   name: string;
   startDate: string;
   endDate: string;
+  baselineStartDate?: string;
+  baselineEndDate?: string;
   duration: number;
   owner: string;
   progress: number;
@@ -55,12 +57,33 @@ export interface TaskAuditLogItem {
   changedAt: string;
 }
 
+export type SaveTrigger = "manual" | "auto" | "restore";
+
+export interface WorkspaceSnapshotData {
+  projects: ProjectItem[];
+  tasks: TaskItem[];
+  activeProjectId: string;
+  projectPermissions: ProjectPermissionItem[];
+  auditLogs: TaskAuditLogItem[];
+}
+
+export interface WorkspaceRevisionItem {
+  id: string;
+  projectId: string;
+  createdAt: string;
+  createdBy: string;
+  trigger: SaveTrigger;
+  checksum: string;
+  data: WorkspaceSnapshotData;
+}
+
 export interface PersistedState {
   projects: ProjectItem[];
   tasks: TaskItem[];
   activeProjectId: string;
   projectPermissions?: ProjectPermissionItem[];
   auditLogs?: TaskAuditLogItem[];
+  revisions?: WorkspaceRevisionItem[];
 }
 
 export interface TaskFilters {

@@ -150,3 +150,24 @@ Set the same `VITE_...` variables in Vercel Project Settings -> Environment Vari
   - Supabase (shared data for all users)
   - localStorage (local backup)
 - If Supabase is not configured, `Save` writes to localStorage only.
+
+### 5) Email notifications (P2)
+
+This version adds a backend mail endpoint for:
+
+- Sending a **test email**
+- Sending **delayed + upcoming task summary**
+
+Setup on Vercel (Project Settings -> Environment Variables):
+
+```bash
+RESEND_API_KEY=re_xxx
+EMAIL_FROM=TMM Project <onboarding@resend.dev>
+```
+
+Notes:
+
+- The endpoint is `POST /api/send-email`
+- Frontend entry is the new **Email Alerts / 邮件通知** menu in the header
+- If you run `npm run dev` locally, Vite does not run Vercel API routes.
+  - Test mail on deployed Vercel URL, or run with `vercel dev`

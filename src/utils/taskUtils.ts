@@ -120,9 +120,12 @@ export const reorderTasks = (tasks: TaskItem[], projectId: string, activeId: str
 export const sanitizeTask = (task: TaskItem): TaskItem => {
   const duration = task.isMilestone ? 1 : calcDuration(task.startDate, task.endDate);
   const normalizedProgress = Math.min(100, Math.max(0, Math.round(task.progress)));
+  const normalizedEnd = task.isMilestone ? task.startDate : task.endDate;
   return {
     ...task,
-    endDate: task.isMilestone ? task.startDate : task.endDate,
+    endDate: normalizedEnd,
+    baselineStartDate: task.baselineStartDate ?? task.startDate,
+    baselineEndDate: task.baselineEndDate ?? normalizedEnd,
     duration,
     progress: normalizedProgress
   };

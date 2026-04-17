@@ -41,6 +41,8 @@ interface GanttBoardProps {
   onToggleCollapse: (taskId: string) => void;
   onQuickUpdate: (taskId: string, patch: Partial<TaskItem>) => void;
   collapsedTaskIds: Set<string>;
+  riskTaskIds?: Set<string>;
+  criticalPathTaskIds?: Set<string>;
   onRequireAuth?: () => void;
 }
 
@@ -151,6 +153,94 @@ const GRADIENT_SPECS: GradientSpec[] = [
       { offset: "0%", color: "#c2410c" },
       { offset: "100%", color: "#7c2d12" }
     ]
+  },
+  {
+    id: "ccsa-grad-inprogress-bg-cp",
+    stops: [
+      { offset: "0%", color: "#3b82f6" },
+      { offset: "55%", color: "#1d4ed8" },
+      { offset: "100%", color: "#1e3a8a" }
+    ]
+  },
+  {
+    id: "ccsa-grad-inprogress-selected-cp",
+    stops: [
+      { offset: "0%", color: "#2563eb" },
+      { offset: "100%", color: "#1e3a8a" }
+    ]
+  },
+  {
+    id: "ccsa-grad-inprogress-progress-cp",
+    stops: [
+      { offset: "0%", color: "#1d4ed8" },
+      { offset: "100%", color: "#172554" }
+    ]
+  },
+  {
+    id: "ccsa-grad-completed-bg-cp",
+    stops: [
+      { offset: "0%", color: "#22c55e" },
+      { offset: "55%", color: "#059669" },
+      { offset: "100%", color: "#065f46" }
+    ]
+  },
+  {
+    id: "ccsa-grad-completed-selected-cp",
+    stops: [
+      { offset: "0%", color: "#16a34a" },
+      { offset: "100%", color: "#065f46" }
+    ]
+  },
+  {
+    id: "ccsa-grad-completed-progress-cp",
+    stops: [
+      { offset: "0%", color: "#0f766e" },
+      { offset: "100%", color: "#064e3b" }
+    ]
+  },
+  {
+    id: "ccsa-grad-notstarted-bg-cp",
+    stops: [
+      { offset: "0%", color: "#64748b" },
+      { offset: "55%", color: "#475569" },
+      { offset: "100%", color: "#334155" }
+    ]
+  },
+  {
+    id: "ccsa-grad-notstarted-selected-cp",
+    stops: [
+      { offset: "0%", color: "#475569" },
+      { offset: "100%", color: "#1f2937" }
+    ]
+  },
+  {
+    id: "ccsa-grad-notstarted-progress-cp",
+    stops: [
+      { offset: "0%", color: "#334155" },
+      { offset: "100%", color: "#111827" }
+    ]
+  },
+  {
+    id: "ccsa-grad-delayed-bg-cp",
+    stops: [
+      { offset: "0%", color: "#f59e0b" },
+      { offset: "55%", color: "#b45309" },
+      { offset: "100%", color: "#78350f" }
+    ]
+  },
+  {
+    id: "ccsa-grad-delayed-selected-cp",
+    stops: [
+      { offset: "0%", color: "#d97706" },
+      { offset: "100%", color: "#78350f" }
+    ]
+  },
+  {
+    id: "ccsa-grad-delayed-progress-cp",
+    stops: [
+      { offset: "0%", color: "#b45309" },
+      { offset: "100%", color: "#7c2d12" }
+    ]
   }
 ];
 
@@ -194,35 +284,63 @@ const statusVariant = (status: TaskItem["status"]): StatusVariant => {
   }
 };
 
-const statusBarStyles = (status: TaskItem["status"]): GanttTask["styles"] => {
+const statusBarStyles = (
+  status: TaskItem["status"],
+  isCriticalRisk = false,
+  isCriticalPath = false
+): GanttTask["styles"] => {
+  if (isCriticalRisk) {
+    return {
+      backgroundColor: "#ef4444",
+      backgroundSelectedColor: "#dc2626",
+      progressColor: "#ef4444",
+      progressSelectedColor: "#b91c1c"
+    };
+  }
   switch (status) {
     case "in_progress":
       return {
-        backgroundColor: gradientFill("ccsa-grad-inprogress-bg"),
-        backgroundSelectedColor: gradientFill("ccsa-grad-inprogress-selected"),
-        progressColor: gradientFill("ccsa-grad-inprogress-progress"),
-        progressSelectedColor: gradientFill("ccsa-grad-inprogress-selected")
+        backgroundColor: gradientFill(isCriticalPath ? "ccsa-grad-inprogress-bg-cp" : "ccsa-grad-inprogress-bg"),
+        backgroundSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-inprogress-selected-cp" : "ccsa-grad-inprogress-selected"
+        ),
+        progressColor: gradientFill(isCriticalPath ? "ccsa-grad-inprogress-progress-cp" : "ccsa-grad-inprogress-progress"),
+        progressSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-inprogress-selected-cp" : "ccsa-grad-inprogress-selected"
+        )
       };
     case "completed":
       return {
-        backgroundColor: gradientFill("ccsa-grad-completed-bg"),
-        backgroundSelectedColor: gradientFill("ccsa-grad-completed-selected"),
-        progressColor: gradientFill("ccsa-grad-completed-progress"),
-        progressSelectedColor: gradientFill("ccsa-grad-completed-selected")
+        backgroundColor: gradientFill(isCriticalPath ? "ccsa-grad-completed-bg-cp" : "ccsa-grad-completed-bg"),
+        backgroundSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-completed-selected-cp" : "ccsa-grad-completed-selected"
+        ),
+        progressColor: gradientFill(isCriticalPath ? "ccsa-grad-completed-progress-cp" : "ccsa-grad-completed-progress"),
+        progressSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-completed-selected-cp" : "ccsa-grad-completed-selected"
+        )
       };
     case "delayed":
       return {
-        backgroundColor: gradientFill("ccsa-grad-delayed-bg"),
-        backgroundSelectedColor: gradientFill("ccsa-grad-delayed-selected"),
-        progressColor: gradientFill("ccsa-grad-delayed-progress"),
-        progressSelectedColor: gradientFill("ccsa-grad-delayed-selected")
+        backgroundColor: gradientFill(isCriticalPath ? "ccsa-grad-delayed-bg-cp" : "ccsa-grad-delayed-bg"),
+        backgroundSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-delayed-selected-cp" : "ccsa-grad-delayed-selected"
+        ),
+        progressColor: gradientFill(isCriticalPath ? "ccsa-grad-delayed-progress-cp" : "ccsa-grad-delayed-progress"),
+        progressSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-delayed-selected-cp" : "ccsa-grad-delayed-selected"
+        )
       };
     default:
       return {
-        backgroundColor: gradientFill("ccsa-grad-notstarted-bg"),
-        backgroundSelectedColor: gradientFill("ccsa-grad-notstarted-selected"),
-        progressColor: gradientFill("ccsa-grad-notstarted-progress"),
-        progressSelectedColor: gradientFill("ccsa-grad-notstarted-selected")
+        backgroundColor: gradientFill(isCriticalPath ? "ccsa-grad-notstarted-bg-cp" : "ccsa-grad-notstarted-bg"),
+        backgroundSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-notstarted-selected-cp" : "ccsa-grad-notstarted-selected"
+        ),
+        progressColor: gradientFill(isCriticalPath ? "ccsa-grad-notstarted-progress-cp" : "ccsa-grad-notstarted-progress"),
+        progressSelectedColor: gradientFill(
+          isCriticalPath ? "ccsa-grad-notstarted-selected-cp" : "ccsa-grad-notstarted-selected"
+        )
       };
   }
 };
@@ -256,6 +374,8 @@ export const GanttBoard = ({
   onToggleCollapse,
   onQuickUpdate,
   collapsedTaskIds,
+  riskTaskIds,
+  criticalPathTaskIds,
   onRequireAuth
 }: GanttBoardProps) => {
   const [listPanelWidth, setListPanelWidth] = useState<number>(680);
@@ -453,6 +573,8 @@ export const GanttBoard = ({
       });
 
       for (const item of categoryRows.filter((row) => !row.task.isCategoryPlaceholder)) {
+        const isCriticalRisk = Boolean(riskTaskIds?.has(item.task.id));
+        const isCriticalPath = Boolean(criticalPathTaskIds?.has(item.task.id));
         rows.push({
           id: item.task.id,
           name: item.task.name,
@@ -462,14 +584,14 @@ export const GanttBoard = ({
           type: item.task.isMilestone ? "milestone" : "task",
           dependencies: [],
           displayOrder: displayOrder++,
-          styles: statusBarStyles(item.task.status),
+          styles: statusBarStyles(item.task.status, isCriticalRisk, isCriticalPath),
           isDisabled: !canEdit
         });
       }
     });
 
     return rows;
-  }, [canEdit, groupedRows, tasks, viewMode]);
+  }, [canEdit, groupedRows, tasks, viewMode, riskTaskIds, criticalPathTaskIds]);
 
   useEffect(() => {
     const root = wrapperRef.current;
@@ -676,7 +798,11 @@ export const GanttBoard = ({
                   return (
                     <div
                       key={id}
-                      className={`gantt-left-row gantt-row ${visible.depth > 0 ? "subtask" : ""} ${isSelected ? "selected-row" : ""}`}
+                      className={`gantt-left-row gantt-row ${visible.depth > 0 ? "subtask" : ""} ${
+                        isSelected ? "selected-row" : ""
+                      } ${riskTaskIds?.has(id) ? "critical-risk-row" : ""} ${
+                        criticalPathTaskIds?.has(id) ? "critical-path-row" : ""
+                      }`}
                       style={{ height: rowHeight }}
                       onDragOver={(event) => {
                         if (!canEdit) return;
@@ -756,6 +882,7 @@ export const GanttBoard = ({
                                 +
                               </button>
                             </div>
+                            {criticalPathTaskIds?.has(id) ? <span className="critical-path-pill">CP</span> : null}
                             <input
                               key={`${id}-name-${visible.task.name}`}
                               className="inline-text"

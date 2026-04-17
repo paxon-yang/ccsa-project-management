@@ -121,6 +121,8 @@ const texts = {
   ownerRequired: { zh: "\u8d1f\u8d23\u4eba\u4e0d\u80fd\u4e3a\u7a7a\u3002", en: "Owner is required." },
   progressInvalid: { zh: "\u8fdb\u5ea6\u5fc5\u987b\u662f 0-100 \u4e4b\u95f4\u7684\u6570\u5b57\u3002", en: "Progress must be between 0 and 100." },
   parentInvalid: { zh: "\u7236\u4efb\u52a1\u4e0d\u80fd\u9009\u62e9\u5f53\u524d\u4efb\u52a1\u3002", en: "Parent task cannot be current task." },
+  dateRangeInvalid: { zh: "\u7ed3\u675f\u65e5\u671f\u4e0d\u80fd\u65e9\u4e8e\u5f00\u59cb\u65e5\u671f\u3002", en: "End date cannot be earlier than start date." },
+  dependencyCycleInvalid: { zh: "\u4f9d\u8d56\u5173\u7cfb\u5b58\u5728\u5faa\u73af\uff0c\u8bf7\u8c03\u6574\u540e\u518d\u4fdd\u5b58\u3002", en: "Dependency cycle detected. Please adjust and retry." },
   projectNameRequired: { zh: "\u9879\u76ee\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a\u3002", en: "Project name is required." },
   daySuffix: { zh: "\u5929", en: "d" }
 } as const;
