@@ -1632,11 +1632,6 @@ export const App = () => {
               </button>
             </div>
             {isRemoteStoreEnabled && !canEdit ? <span className="readonly-badge">{t("authReadonlyHint")}</span> : null}
-            {isRemoteStoreEnabled && currentUser ? (
-              <span className="user-chip" title={currentUser.email}>
-                {t("authSignedInAs")}: {currentUser.email || currentUser.id.slice(0, 8)}
-              </span>
-            ) : null}
             {isRemoteStoreEnabled ? (
               <span className={`role-chip role-${currentProjectRole}`} title={t("projectRole")}>
                 {t("projectRole")}: {getRoleLabel(currentProjectRole)}
@@ -1653,9 +1648,14 @@ export const App = () => {
                     <div className="settings-group-body">
                       {isRemoteStoreEnabled ? (
                         currentUser ? (
-                          <button className="btn btn-secondary settings-inline-btn" onClick={() => void handleSignOut()}>
-                            {t("logout")}
-                          </button>
+                          <>
+                            <div className="settings-current-user" title={currentUser.email}>
+                              {t("authSignedInAs")}: {currentUser.email || currentUser.id.slice(0, 8)}
+                            </div>
+                            <button className="btn btn-secondary settings-inline-btn" onClick={() => void handleSignOut()}>
+                              {t("logout")}
+                            </button>
+                          </>
                         ) : (
                           <div className="settings-inline-actions">
                             <button className="btn btn-secondary settings-inline-btn" onClick={() => openAuthDialog("login")}>
@@ -1669,6 +1669,27 @@ export const App = () => {
                       ) : (
                         <div className="permission-empty">{language === "zh" ? "当前为本地模式" : "Local mode is active."}</div>
                       )}
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "项目设置" : "Project Settings"}</summary>
+                    <div className="settings-group-body">
+                      <div className="settings-field-row">
+                        <label className="settings-field-label" htmlFor="settings-timeline-start">
+                          {t("timelineStart")}
+                        </label>
+                        <input
+                          id="settings-timeline-start"
+                          type="date"
+                          className="input timeline-start-input settings-timeline-input"
+                          value={activeTimelineStartDate}
+                          title={t("timelineStart")}
+                          aria-label={t("timelineStart")}
+                          disabled={!canEdit || !activeProjectId}
+                          onChange={(event) => handleTimelineStartDateChange(event.target.value)}
+                        />
+                      </div>
                     </div>
                   </details>
 
@@ -2033,15 +2054,6 @@ export const App = () => {
                 </option>
               ))}
             </select>
-            <input
-              type="date"
-              className="input timeline-start-input"
-              value={activeTimelineStartDate}
-              title={t("timelineStart")}
-              aria-label={t("timelineStart")}
-              disabled={!canEdit || !activeProjectId}
-              onChange={(event) => handleTimelineStartDateChange(event.target.value)}
-            />
             <button
               className="btn btn-secondary"
               onClick={() => {

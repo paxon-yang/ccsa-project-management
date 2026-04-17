@@ -123,3 +123,8 @@
   - Email Alerts
   - Import Excel
 - Kept existing behavior/logic unchanged; only interaction entry was reorganized.
+
+### 2026-04-17 Step UI-Settings Refinement Completed
+- Moved signed-in email display from header into `Settings -> Account`.
+- Moved timeline start date control from header into `Settings -> Project Settings`.
+- Reduced top bar clutter while preserving the same timeline behavior and permissions rules.

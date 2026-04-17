@@ -2370,6 +2370,33 @@ button {
   margin-bottom: 0;
 }
 
+.settings-current-user {
+  font-size: 12px;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-field-row {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-field-label {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.settings-timeline-input {
+  width: 220px;
+}
+
 .critical-path-row {
   box-shadow: inset 3px 0 0 #2563eb, inset 0 -1px #e5e7eb;
 }
