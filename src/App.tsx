@@ -1,8 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import * as XLSX from "xlsx";
 import { AuthDialog } from "./components/AuthDialog";
 import { GanttBoard } from "./components/GanttBoard";
 import { ProjectDialog } from "./components/ProjectDialog";
@@ -37,9 +34,12 @@ import {
 } from "./types";
 import { calcDuration, normalizeDates, toDate, toISODate } from "./utils/date";
 import { buildProjectNotificationSummary, buildSummaryEmailContent, buildTestEmailContent } from "./utils/notificationUtils";
+import { buildPersistedState, checksumForSnapshotData, chooseHydrationSource, isPersistedSnapshotCurrent } from "./utils/persistence";
 import { computeCriticalPath, isDelayedOrOverdue } from "./utils/projectAnalysis";
 import { hasDependencyCycle, isEndBeforeStart, normalizeDependencyIds } from "./utils/taskValidation";
 import { getDescendantIds, getVisibleTasks, reorderTasks, sanitizeTask } from "./utils/taskUtils";
+
+type XlsxModule = typeof import("xlsx");
 
 const STORAGE_KEY = "ccsa-project-management-state-v2";
 const LEGACY_STORAGE_KEYS = ["ccsa-project-management-state-v1"];
@@ -297,21 +297,19 @@ export const App = () => {
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const [permissionEmail, setPermissionEmail] = useState("");
   const [permissionRole, setPermissionRole] = useState<ProjectRole>("viewer");
-  const [isRiskPanelOpen, setRiskPanelOpen] = useState(false);
-  const riskPanelRef = useRef<HTMLDivElement>(null);
-  const [isDashboardPanelOpen, setDashboardPanelOpen] = useState(false);
-  const dashboardPanelRef = useRef<HTMLDivElement>(null);
   const [notifyEmail, setNotifyEmail] = useState("");
   const [isSendingNotify, setSendingNotify] = useState(false);
   const [notifyResult, setNotifyResult] = useState<string>();
-  const [isExportPanelOpen, setExportPanelOpen] = useState(false);
-  const exportPanelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setImporting] = useState(false);
   const [isExporting, setExporting] = useState(false);
   const autoSaveTimerRef = useRef<number | null>(null);
-  const lastSavedChecksumRef = useRef<string>("");
   const isPersistingRef = useRef(false);
+  const hasUnsavedChangesRef = useRef(false);
+  const latestSnapshotDataRef = useRef<WorkspaceSnapshotData | null>(null);
+  const latestSnapshotChecksumRef = useRef("");
+  const latestRevisionsRef = useRef<WorkspaceRevisionItem[]>(revisions);
+  const pendingPersistAfterCurrentRef = useRef(false);
 
   const viewMode: ViewModeOption = "day";
   const sortBy: SortBy = "default";
@@ -515,11 +513,38 @@ export const App = () => {
     projectPermissions: nextPermissions,
     auditLogs: nextAuditLogs
   });
-  const checksumForSnapshotData = (data: WorkspaceSnapshotData): string => JSON.stringify(data);
+  const snapshotDataFromPersistedState = (state: PersistedState): WorkspaceSnapshotData =>
+    buildSnapshotData(
+      state.projects,
+      state.tasks.map(sanitizeTask),
+      state.activeProjectId || state.projects[0]?.id || "",
+      normalizePermissions(state.projectPermissions),
+      normalizeAuditLogs(state.auditLogs)
+    );
   const currentSnapshotData = useMemo(
     () => buildSnapshotData(projects, tasks, activeProjectId, projectPermissions, auditLogs),
     [projects, tasks, activeProjectId, projectPermissions, auditLogs]
   );
+
+  useEffect(() => {
+    latestSnapshotDataRef.current = currentSnapshotData;
+    latestSnapshotChecksumRef.current = checksumForSnapshotData(currentSnapshotData);
+  }, [currentSnapshotData]);
+
+  useEffect(() => {
+    latestRevisionsRef.current = revisions;
+  }, [revisions]);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const draft = buildPersistedState(currentSnapshotData, revisions, new Date().toISOString());
+    saveState(draft);
+    localStorage.setItem(LANGUAGE_KEY, language);
+  }, [hasUnsavedChanges, currentSnapshotData, revisions, language]);
 
   const visibleTasks = useMemo(
     () => getVisibleTasks(tasks, activeProjectId, collapsedTaskIds, searchText, filters, sortBy),
@@ -559,13 +584,32 @@ export const App = () => {
       try {
         const remote = await loadRemoteState();
         if (cancelled || !remote) return;
-        const normalized = normalizePersistedState(remote);
-        setProjects(normalized.projects);
-        setTasks(normalized.tasks.map(sanitizeTask));
-        setProjectPermissions(normalizePermissions(normalized.projectPermissions));
-        setAuditLogs(normalizeAuditLogs(normalized.auditLogs));
-        setRevisions(normalizeRevisions(normalized.revisions));
-        setActiveProjectId(normalized.activeProjectId || normalized.projects[0]?.id || "");
+        const normalizedRemote = normalizePersistedState(remote);
+        const normalizedLocal = normalizePersistedState(loadState());
+        const source = hasUnsavedChangesRef.current ? "local" : chooseHydrationSource(normalizedLocal, normalizedRemote);
+
+        if (source === "local") {
+          const localData = snapshotDataFromPersistedState(normalizedLocal);
+          setProjects(localData.projects);
+          setTasks(localData.tasks);
+          setProjectPermissions(localData.projectPermissions);
+          setAuditLogs(localData.auditLogs);
+          setRevisions(normalizeRevisions(normalizedLocal.revisions));
+          setActiveProjectId(localData.activeProjectId);
+          hasUnsavedChangesRef.current = true;
+          setHasUnsavedChanges(true);
+          return;
+        }
+
+        const remoteData = snapshotDataFromPersistedState(normalizedRemote);
+        setProjects(remoteData.projects);
+        setTasks(remoteData.tasks);
+        setProjectPermissions(remoteData.projectPermissions);
+        setAuditLogs(remoteData.auditLogs);
+        setRevisions(normalizeRevisions(normalizedRemote.revisions));
+        setActiveProjectId(remoteData.activeProjectId);
+        saveState(normalizedRemote);
+        hasUnsavedChangesRef.current = false;
         setHasUnsavedChanges(false);
       } catch (error) {
         console.error("Remote load failed:", error);
@@ -600,43 +644,7 @@ export const App = () => {
   }, [isSettingsPanelOpen]);
 
   useEffect(() => {
-    if (!isRiskPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (riskPanelRef.current?.contains(target)) return;
-      setRiskPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isRiskPanelOpen]);
-
-  useEffect(() => {
-    if (!isDashboardPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (dashboardPanelRef.current?.contains(target)) return;
-      setDashboardPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isDashboardPanelOpen]);
-
-  useEffect(() => {
-    if (!isExportPanelOpen) return;
-    const onWindowMouseDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (exportPanelRef.current?.contains(target)) return;
-      setExportPanelOpen(false);
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [isExportPanelOpen]);
-
-  useEffect(() => {
     setSettingsPanelOpen(false);
-    setRiskPanelOpen(false);
-    setDashboardPanelOpen(false);
-    setExportPanelOpen(false);
     setNotifyResult(undefined);
   }, [activeProjectId, normalizedUserEmail]);
 
@@ -665,12 +673,6 @@ export const App = () => {
   }, [activeProjectId, normalizedUserEmail, projectPermissions]);
 
   useEffect(() => {
-    if (!hasUnsavedChanges) {
-      lastSavedChecksumRef.current = checksumForSnapshotData(currentSnapshotData);
-    }
-  }, [hasUnsavedChanges, currentSnapshotData]);
-
-  useEffect(() => {
     if (autoSaveTimerRef.current) {
       window.clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
@@ -696,6 +698,13 @@ export const App = () => {
     nextAuditLogs: TaskAuditLogItem[] = auditLogs,
     nextRevisions: WorkspaceRevisionItem[] = revisions
   ) => {
+    const nextSnapshotData = buildSnapshotData(nextProjects, nextTasks, nextActiveProjectId, nextPermissions, nextAuditLogs);
+    latestSnapshotDataRef.current = nextSnapshotData;
+    latestSnapshotChecksumRef.current = checksumForSnapshotData(nextSnapshotData);
+    latestRevisionsRef.current = nextRevisions;
+    hasUnsavedChangesRef.current = true;
+    saveState(buildPersistedState(nextSnapshotData, nextRevisions, new Date().toISOString()));
+    localStorage.setItem(LANGUAGE_KEY, language);
     setProjects(nextProjects);
     setTasks(nextTasks);
     setProjectPermissions(nextPermissions);
@@ -854,21 +863,26 @@ export const App = () => {
     }
   ): Promise<boolean> => {
     if (!canEdit) return false;
-    if (isPersistingRef.current) return false;
+    if (isPersistingRef.current) {
+      pendingPersistAfterCurrentRef.current = true;
+      return false;
+    }
     isPersistingRef.current = true;
     const silent = Boolean(options?.silent);
-    const data = options?.data ?? currentSnapshotData;
+    const data = options?.data ?? latestSnapshotDataRef.current ?? currentSnapshotData;
     const actor = normalizedUserEmail || currentUser?.id || "system";
-    const revisionSeed = options?.baseRevisions ?? revisions;
+    const revisionSeed = options?.baseRevisions ?? latestRevisionsRef.current;
     const { revisions: nextRevisions, checksum } = buildNextRevisions(revisionSeed, trigger, actor, data);
-    const snapshot: PersistedState = {
-      ...data,
-      revisions: nextRevisions
-    };
+    const snapshot = buildPersistedState(data, nextRevisions, new Date().toISOString());
 
     if (!silent) {
       setIsSaving(true);
     }
+    saveState(snapshot);
+    localStorage.setItem(LANGUAGE_KEY, language);
+    setRevisions(nextRevisions);
+    latestRevisionsRef.current = nextRevisions;
+
     let remoteSaved = true;
     try {
       if (isRemoteStoreEnabled) {
@@ -887,16 +901,20 @@ export const App = () => {
       }
     }
 
-    saveState(snapshot);
-    localStorage.setItem(LANGUAGE_KEY, language);
-    setRevisions(nextRevisions);
+    const latestChecksum = latestSnapshotChecksumRef.current || checksumForSnapshotData(latestSnapshotDataRef.current ?? data);
+    const isCurrent = isPersistedSnapshotCurrent(checksum, latestChecksum, isRemoteStoreEnabled, remoteSaved);
+    const shouldPersistLatest = pendingPersistAfterCurrentRef.current || checksum !== latestChecksum;
+    pendingPersistAfterCurrentRef.current = false;
+    hasUnsavedChangesRef.current = !isCurrent;
+    setHasUnsavedChanges(!isCurrent);
 
-    const success = !isRemoteStoreEnabled || remoteSaved;
-    setHasUnsavedChanges(!success);
-    if (success) {
-      lastSavedChecksumRef.current = checksum;
+    if (shouldPersistLatest) {
+      window.setTimeout(() => {
+        void persistWorkspace("auto", { silent: true });
+      }, 0);
     }
-    return success;
+
+    return isCurrent;
   };
 
   const handleRestoreRevision = async (revisionId: string) => {
@@ -1050,9 +1068,9 @@ export const App = () => {
     }
   };
 
-  const toImportedDate = (value: unknown, fallback: string): string => {
+  const toImportedDate = (value: unknown, fallback: string, xlsx: XlsxModule): string => {
     if (typeof value === "number") {
-      const parsed = XLSX.SSF.parse_date_code(value);
+      const parsed = xlsx.SSF.parse_date_code(value);
       if (parsed) {
         const y = String(parsed.y).padStart(4, "0");
         const m = String(parsed.m).padStart(2, "0");
@@ -1069,6 +1087,7 @@ export const App = () => {
     if (!file || !requireEditPermission()) return;
     setImporting(true);
     try {
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
@@ -1124,8 +1143,8 @@ export const App = () => {
           .map((item) => item.trim())
           .filter(Boolean);
         const fallbackDate = activeTimelineStartDate || new Date().toISOString().slice(0, 10);
-        const startDate = toImportedDate(startRaw, fallbackDate);
-        const endDateCandidate = toImportedDate(endRaw, startDate);
+        const startDate = toImportedDate(startRaw, fallbackDate, XLSX);
+        const endDateCandidate = toImportedDate(endRaw, startDate, XLSX);
         const isMilestone = ["1", "true", "yes", "y", "是", "里程碑"].includes(milestoneRaw);
         const normalized = normalizeDates(startDate, isMilestone ? startDate : endDateCandidate);
         const progress = Number.isFinite(progressRaw) ? Math.max(0, Math.min(100, Math.round(progressRaw))) : 0;
@@ -1218,6 +1237,7 @@ export const App = () => {
     }
     setExporting(true);
     try {
+      const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
         scale: Math.max(2, window.devicePixelRatio || 1)
@@ -1241,6 +1261,7 @@ export const App = () => {
     }
     setExporting(true);
     try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
       const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
         scale: Math.max(2, window.devicePixelRatio || 1)
@@ -1900,6 +1921,137 @@ export const App = () => {
                   </details>
 
                   <details className="settings-group">
+                    <summary>{language === "zh" ? `风险(${criticalRiskRows.length})` : `Risks (${criticalRiskRows.length})`}</summary>
+                    <div className="settings-group-body">
+                      <div className="risk-panel settings-embedded-panel">
+                        {projectHealthMetrics.criticalPathCycleDetected ? (
+                          <div className="risk-cycle-warning">
+                            {language === "zh"
+                              ? "检测到依赖环路，关键路径计算已跳过。请先修复依赖关系。"
+                              : "Dependency cycle detected. Critical path is skipped until dependencies are fixed."}
+                          </div>
+                        ) : null}
+                        <div className="risk-section-title">
+                          {language === "zh"
+                            ? `关键路径（${criticalPathRows.length} 任务 / ${projectHealthMetrics.criticalPathDurationDays} 天）`
+                            : `Critical Path (${criticalPathRows.length} tasks / ${projectHealthMetrics.criticalPathDurationDays} days)`}
+                        </div>
+                        {criticalPathRows.length === 0 ? (
+                          <div className="permission-empty">{language === "zh" ? "暂无可计算的关键路径" : "No critical path yet"}</div>
+                        ) : (
+                          criticalPathRows.map((row, index) => (
+                            <div key={`cp-${row.id}`} className="risk-row risk-row-critical-path">
+                              <div className="risk-row-main">
+                                <span className="risk-cp-index">{index + 1}</span>
+                                <span>{row.name}</span>
+                              </div>
+                              <div className="risk-row-meta">
+                                <span>{row.owner || (language === "zh" ? "未分配" : "Unassigned")}</span>
+                                <span>{`${row.startDate} → ${row.endDate}`}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        <div className="risk-section-title">
+                          {language === "zh" ? `延期风险（${criticalRiskRows.length}）` : `Delay Risks (${criticalRiskRows.length})`}
+                        </div>
+                        {criticalRiskRows.length === 0 ? (
+                          <div className="permission-empty">{language === "zh" ? "当前无关键延期风险" : "No critical delay risks"}</div>
+                        ) : (
+                          criticalRiskRows.map((row) => (
+                            <div key={row.id} className={`risk-row ${row.isCriticalPath ? "risk-row-critical-path" : ""}`}>
+                              <div className="risk-row-main">
+                                {row.name}
+                                {row.isCriticalPath ? (
+                                  <span className="risk-cp-tag">{language === "zh" ? "关键路径" : "Critical Path"}</span>
+                                ) : null}
+                              </div>
+                              <div className="risk-row-meta">
+                                <span>{row.owner || (language === "zh" ? "未分配" : "Unassigned")}</span>
+                                <span>{row.endDate}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "仪表盘" : "Dashboard"}</summary>
+                    <div className="settings-group-body">
+                      <div className="dashboard-panel settings-embedded-panel">
+                        <div className="dashboard-kpi-grid">
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "任务总数" : "Total Tasks"}</div>
+                            <div className="dashboard-kpi-value">{projectHealthMetrics.total}</div>
+                          </div>
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "按时率" : "On-time Rate"}</div>
+                            <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.onTimeRate)}</div>
+                          </div>
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "延期率" : "Delay Rate"}</div>
+                            <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.delayedRate)}</div>
+                          </div>
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "完成率" : "Completion Rate"}</div>
+                            <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.completedRate)}</div>
+                          </div>
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "关键路径任务" : "Critical Path Tasks"}</div>
+                            <div className="dashboard-kpi-value">{projectHealthMetrics.criticalPathCount}</div>
+                          </div>
+                          <div className="dashboard-kpi-card">
+                            <div className="dashboard-kpi-title">{language === "zh" ? "关键路径延期" : "Critical Path Delays"}</div>
+                            <div className="dashboard-kpi-value">{projectHealthMetrics.criticalPathDelayedCount}</div>
+                          </div>
+                        </div>
+                        <div className="dashboard-kpi-foot">
+                          {language === "zh"
+                            ? `关键路径总工期：${projectHealthMetrics.criticalPathDurationDays} 天`
+                            : `Critical path duration: ${projectHealthMetrics.criticalPathDurationDays} days`}
+                        </div>
+                        <div className="dashboard-owner-head">{language === "zh" ? "负责人负载" : "Owner Workload"}</div>
+                        {projectHealthMetrics.ownerLoad.length === 0 ? (
+                          <div className="permission-empty">{language === "zh" ? "暂无任务数据" : "No task data yet"}</div>
+                        ) : (
+                          projectHealthMetrics.ownerLoad.map((row) => (
+                            <div key={row.owner} className="dashboard-owner-row">
+                              <div className="dashboard-owner-main">
+                                <span className="dashboard-owner-name">{row.owner}</span>
+                                <span className="dashboard-owner-total">
+                                  {language === "zh" ? `任务 ${row.total}` : `${row.total} tasks`}
+                                </span>
+                              </div>
+                              <div className="dashboard-owner-meta">
+                                <span>{language === "zh" ? `完成 ${row.completed}` : `Done ${row.completed}`}</span>
+                                <span>{language === "zh" ? `延期 ${row.delayed}` : `Delayed ${row.delayed}`}</span>
+                                <span>{language === "zh" ? `进行中 ${row.inProgress}` : `In Progress ${row.inProgress}`}</span>
+                                <span>{language === "zh" ? `未开始 ${row.notStarted}` : `Not Started ${row.notStarted}`}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
+                    <summary>{language === "zh" ? "周报导出" : "Weekly Export"}</summary>
+                    <div className="settings-group-body">
+                      <div className="export-panel settings-embedded-panel">
+                        <button className="btn btn-ghost export-btn" onClick={() => void exportNodeAsPng()} disabled={isExporting}>
+                          {language === "zh" ? "导出 PNG" : "Export PNG"}
+                        </button>
+                        <button className="btn btn-ghost export-btn" onClick={() => void exportNodeAsPdf()} disabled={isExporting}>
+                          {language === "zh" ? "导出 PDF" : "Export PDF"}
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="settings-group">
                     <summary>{language === "zh" ? "导入" : "Import"}</summary>
                     <div className="settings-group-body">
                       <button className="btn btn-secondary settings-inline-btn" disabled={!canEdit || isImporting} onClick={() => fileInputRef.current?.click()}>
@@ -1907,140 +2059,6 @@ export const App = () => {
                       </button>
                     </div>
                   </details>
-                </div>
-              ) : null}
-            </div>
-            <div ref={riskPanelRef} className="risk-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setRiskPanelOpen((prev) => !prev)}>
-                {language === "zh" ? `风险(${criticalRiskRows.length})` : `Risks (${criticalRiskRows.length})`}
-              </button>
-              {isRiskPanelOpen ? (
-                <div className="risk-panel">
-                  {projectHealthMetrics.criticalPathCycleDetected ? (
-                    <div className="risk-cycle-warning">
-                      {language === "zh"
-                        ? "检测到依赖环路，关键路径计算已跳过。请先修复依赖关系。"
-                        : "Dependency cycle detected. Critical path is skipped until dependencies are fixed."}
-                    </div>
-                  ) : null}
-                  <div className="risk-section-title">
-                    {language === "zh"
-                      ? `关键路径（${criticalPathRows.length} 任务 / ${projectHealthMetrics.criticalPathDurationDays} 天）`
-                      : `Critical Path (${criticalPathRows.length} tasks / ${projectHealthMetrics.criticalPathDurationDays} days)`}
-                  </div>
-                  {criticalPathRows.length === 0 ? (
-                    <div className="permission-empty">{language === "zh" ? "暂无可计算的关键路径" : "No critical path yet"}</div>
-                  ) : (
-                    criticalPathRows.map((row, index) => (
-                      <div key={`cp-${row.id}`} className="risk-row risk-row-critical-path">
-                        <div className="risk-row-main">
-                          <span className="risk-cp-index">{index + 1}</span>
-                          <span>{row.name}</span>
-                        </div>
-                        <div className="risk-row-meta">
-                          <span>{row.owner || (language === "zh" ? "未分配" : "Unassigned")}</span>
-                          <span>{`${row.startDate} → ${row.endDate}`}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  <div className="risk-section-title">
-                    {language === "zh" ? `延期风险（${criticalRiskRows.length}）` : `Delay Risks (${criticalRiskRows.length})`}
-                  </div>
-                  {criticalRiskRows.length === 0 ? (
-                    <div className="permission-empty">{language === "zh" ? "当前无关键延期风险" : "No critical delay risks"}</div>
-                  ) : (
-                    criticalRiskRows.map((row) => (
-                      <div key={row.id} className={`risk-row ${row.isCriticalPath ? "risk-row-critical-path" : ""}`}>
-                        <div className="risk-row-main">
-                          {row.name}
-                          {row.isCriticalPath ? (
-                            <span className="risk-cp-tag">{language === "zh" ? "关键路径" : "Critical Path"}</span>
-                          ) : null}
-                        </div>
-                        <div className="risk-row-meta">
-                          <span>{row.owner || (language === "zh" ? "未分配" : "Unassigned")}</span>
-                          <span>{row.endDate}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div ref={dashboardPanelRef} className="dashboard-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setDashboardPanelOpen((prev) => !prev)}>
-                {language === "zh" ? "仪表盘" : "Dashboard"}
-              </button>
-              {isDashboardPanelOpen ? (
-                <div className="dashboard-panel">
-                  <div className="dashboard-kpi-grid">
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "任务总数" : "Total Tasks"}</div>
-                      <div className="dashboard-kpi-value">{projectHealthMetrics.total}</div>
-                    </div>
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "按时率" : "On-time Rate"}</div>
-                      <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.onTimeRate)}</div>
-                    </div>
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "延期率" : "Delay Rate"}</div>
-                      <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.delayedRate)}</div>
-                    </div>
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "完成率" : "Completion Rate"}</div>
-                      <div className="dashboard-kpi-value">{formatPercent(projectHealthMetrics.completedRate)}</div>
-                    </div>
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "关键路径任务" : "Critical Path Tasks"}</div>
-                      <div className="dashboard-kpi-value">{projectHealthMetrics.criticalPathCount}</div>
-                    </div>
-                    <div className="dashboard-kpi-card">
-                      <div className="dashboard-kpi-title">{language === "zh" ? "关键路径延期" : "Critical Path Delays"}</div>
-                      <div className="dashboard-kpi-value">{projectHealthMetrics.criticalPathDelayedCount}</div>
-                    </div>
-                  </div>
-                  <div className="dashboard-kpi-foot">
-                    {language === "zh"
-                      ? `关键路径总工期：${projectHealthMetrics.criticalPathDurationDays} 天`
-                      : `Critical path duration: ${projectHealthMetrics.criticalPathDurationDays} days`}
-                  </div>
-                  <div className="dashboard-owner-head">{language === "zh" ? "负责人负载" : "Owner Workload"}</div>
-                  {projectHealthMetrics.ownerLoad.length === 0 ? (
-                    <div className="permission-empty">{language === "zh" ? "暂无任务数据" : "No task data yet"}</div>
-                  ) : (
-                    projectHealthMetrics.ownerLoad.map((row) => (
-                      <div key={row.owner} className="dashboard-owner-row">
-                        <div className="dashboard-owner-main">
-                          <span className="dashboard-owner-name">{row.owner}</span>
-                          <span className="dashboard-owner-total">
-                            {language === "zh" ? `任务 ${row.total}` : `${row.total} tasks`}
-                          </span>
-                        </div>
-                        <div className="dashboard-owner-meta">
-                          <span>{language === "zh" ? `完成 ${row.completed}` : `Done ${row.completed}`}</span>
-                          <span>{language === "zh" ? `延期 ${row.delayed}` : `Delayed ${row.delayed}`}</span>
-                          <span>{language === "zh" ? `进行中 ${row.inProgress}` : `In Progress ${row.inProgress}`}</span>
-                          <span>{language === "zh" ? `未开始 ${row.notStarted}` : `Not Started ${row.notStarted}`}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div ref={exportPanelRef} className="export-panel-wrap">
-              <button className="btn btn-secondary" onClick={() => setExportPanelOpen((prev) => !prev)} disabled={isExporting}>
-                {isExporting ? (language === "zh" ? "导出中..." : "Exporting...") : language === "zh" ? "周报导出" : "Weekly Export"}
-              </button>
-              {isExportPanelOpen ? (
-                <div className="export-panel">
-                  <button className="btn btn-ghost export-btn" onClick={() => void exportNodeAsPng()} disabled={isExporting}>
-                    {language === "zh" ? "导出 PNG" : "Export PNG"}
-                  </button>
-                  <button className="btn btn-ghost export-btn" onClick={() => void exportNodeAsPdf()} disabled={isExporting}>
-                    {language === "zh" ? "导出 PDF" : "Export PDF"}
-                  </button>
                 </div>
               ) : null}
             </div>

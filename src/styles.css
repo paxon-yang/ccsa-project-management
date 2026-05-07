@@ -378,6 +378,7 @@ button {
   align-items: center;
   gap: 2px;
   min-width: 0;
+  width: 100%;
 }
 
 .row-drag-handle {
@@ -750,8 +751,33 @@ button {
 }
 
 .gantt-empty {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
   padding: 24px;
   color: var(--text-3);
+  text-align: center;
+}
+
+.gantt-empty-title {
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.gantt-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.gantt-empty-actions .btn {
+  min-width: 96px;
+  justify-content: center;
 }
 
 .gantt-wrapper svg text {
@@ -1249,6 +1275,48 @@ button {
   min-width: 0;
 }
 
+.task-name-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-name-input-wrap::after {
+  content: attr(data-full-name);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  max-width: min(620px, calc(100vw - 56px));
+  padding: 8px 10px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 90;
+}
+
+.task-name-input-wrap:hover::after,
+.task-name-input-wrap:focus-within::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.task-name-input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .inline-select,
 .inline-date,
 .cell-editor,
@@ -1568,6 +1636,12 @@ button {
   z-index: 20;
   background: inherit;
   border-right: 1px solid #d1d5db;
+  overflow: visible;
+}
+
+.gantt-left-row:hover .gantt-cell-task-name,
+.gantt-left-row:focus-within .gantt-cell-task-name {
+  z-index: 80;
 }
 
 .gantt-left-category-row .gantt-cell-task-name {
@@ -2699,4 +2773,19 @@ button {
   justify-content: center;
   height: 30px;
   font-size: 12px;
+}
+
+.settings-embedded-panel {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  z-index: auto;
 }

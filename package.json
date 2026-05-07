@@ -1,12 +1,13 @@
 {
   "name": "ccsa-project-management",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "node scripts/persistence-regression-test.mjs && node scripts/gantt-wheel-regression-test.mjs",
     "backup:export": "node scripts/export-workspace.mjs"
   },
   "dependencies": {

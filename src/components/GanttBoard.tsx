@@ -4,6 +4,7 @@ import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react";
 import { getStatusLabel } from "../i18n";
 import { Language, TaskItem, ViewModeOption, VisibleTask } from "../types";
 import { toDate, toISODate } from "../utils/date";
+import { shouldNormalizeGanttWheel } from "../utils/ganttWheel";
 
 interface GanttBoardProps {
   language: Language;
@@ -22,6 +23,7 @@ interface GanttBoardProps {
       | "quickDelete"
       | "insertRow"
       | "insertRoot"
+      | "addTask"
       | "daySuffix"
   ) => string;
   tasks: VisibleTask[];
@@ -53,10 +55,10 @@ type LeftRow =
 type StatusVariant = "not-started" | "in-progress" | "completed" | "blocked";
 
 const CATEGORY_ROW_PREFIX = "__category_row__:";
-const LIST_GRID_TEMPLATE = "230px 128px 164px 148px 148px 64px 52px";
-const LIST_GRID_MIN_WIDTH = 980;
-const LEFT_PANEL_RATIO = 0.5;
-const LEFT_PANEL_MIN_WIDTH = 500;
+const LIST_GRID_TEMPLATE = "420px 128px 164px 148px 148px 64px 52px";
+const LIST_GRID_MIN_WIDTH = 1124;
+const LEFT_PANEL_RATIO = 0.58;
+const LEFT_PANEL_MIN_WIDTH = 640;
 const TITLE_ROW_HEIGHT = 36;
 const DATES_ROW_HEIGHT = 20;
 const HEADER_HEIGHT = TITLE_ROW_HEIGHT + DATES_ROW_HEIGHT;
@@ -633,6 +635,47 @@ export const GanttBoard = ({
   useEffect(() => {
     const root = wrapperRef.current;
     if (!root) return;
+
+    const normalizedEvents = new WeakSet<WheelEvent>();
+
+    const normalizeTouchpadWheel = (event: WheelEvent) => {
+      if (normalizedEvents.has(event)) return;
+
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("._3eULf")) return;
+      if (!shouldNormalizeGanttWheel(event)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const normalizedEvent = new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        deltaX: 0,
+        deltaY: event.deltaY,
+        deltaZ: event.deltaZ,
+        deltaMode: event.deltaMode,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey
+      });
+
+      normalizedEvents.add(normalizedEvent);
+      target.dispatchEvent(normalizedEvent);
+    };
+
+    root.addEventListener("wheel", normalizeTouchpadWheel, { capture: true, passive: false });
+    return () => root.removeEventListener("wheel", normalizeTouchpadWheel, { capture: true });
+  }, []);
+
+  useEffect(() => {
+    const root = wrapperRef.current;
+    if (!root) return;
     let raf = 0;
     raf = requestAnimationFrame(() => {
       const svgs = root.querySelectorAll<SVGSVGElement>("svg");
@@ -664,7 +707,39 @@ export const GanttBoard = ({
       }
     >
       {ganttTasks.length === 0 ? (
-        <div className="gantt-empty">{t("ganttEmpty")}</div>
+        <div className="gantt-empty">
+          <div className="gantt-empty-title">{t("ganttEmpty")}</div>
+          <div className="gantt-empty-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!canEdit) {
+                  onRequireAuth?.();
+                  return;
+                }
+                onInsertRoot(undefined, "task");
+              }}
+              disabled={!canEdit}
+            >
+              {t("addTask")}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                if (!canEdit) {
+                  onRequireAuth?.();
+                  return;
+                }
+                onInsertRoot(undefined, "category");
+              }}
+              disabled={!canEdit}
+            >
+              {t("insertRoot")}
+            </button>
+          </div>
+        </div>
       ) : (
         <>
           <Gantt
@@ -883,29 +958,33 @@ export const GanttBoard = ({
                               </button>
                             </div>
                             {criticalPathTaskIds?.has(id) ? <span className="critical-path-pill">CP</span> : null}
-                            <input
-                              key={`${id}-name-${visible.task.name}`}
-                              className="inline-text"
-                              defaultValue={visible.task.name}
-                              readOnly={!canEdit}
-                              onMouseDown={(event) => event.stopPropagation()}
-                              onClick={(event) => event.stopPropagation()}
-                              onFocus={(event) => event.currentTarget.select()}
-                              onKeyDown={(event) => {
-                                event.stopPropagation();
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  commitInlineField(visible.task, "name", (event.target as HTMLInputElement).value);
-                                  (event.target as HTMLInputElement).blur();
-                                }
-                                if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  (event.target as HTMLInputElement).value = visible.task.name;
-                                  (event.target as HTMLInputElement).blur();
-                                }
-                              }}
-                              onBlur={(event) => commitInlineField(visible.task, "name", event.target.value)}
-                            />
+                            <div className="task-name-input-wrap" data-full-name={visible.task.name}>
+                              <input
+                                key={`${id}-name-${visible.task.name}`}
+                                className="inline-text task-name-input"
+                                defaultValue={visible.task.name}
+                                title={visible.task.name}
+                                aria-label={visible.task.name}
+                                readOnly={!canEdit}
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onClick={(event) => event.stopPropagation()}
+                                onFocus={(event) => event.currentTarget.select()}
+                                onKeyDown={(event) => {
+                                  event.stopPropagation();
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    commitInlineField(visible.task, "name", (event.target as HTMLInputElement).value);
+                                    (event.target as HTMLInputElement).blur();
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    (event.target as HTMLInputElement).value = visible.task.name;
+                                    (event.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                onBlur={(event) => commitInlineField(visible.task, "name", event.target.value)}
+                              />
+                            </div>
                           </div>
                         </div>
                         <div className="gantt-left-cell gantt-cell">

@@ -84,6 +84,7 @@ export interface PersistedState {
   projectPermissions?: ProjectPermissionItem[];
   auditLogs?: TaskAuditLogItem[];
   revisions?: WorkspaceRevisionItem[];
+  updatedAt?: string;
 }
 
 export interface TaskFilters {

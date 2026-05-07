@@ -76,22 +76,30 @@ export const signOutRemote = async (): Promise<void> => {
 
 export const loadRemoteState = async (): Promise<PersistedState | undefined> => {
   if (!supabase) return undefined;
-  const { data, error } = await supabase.from("workspaces").select("payload").eq("id", workspaceId).maybeSingle<WorkspaceRow>();
+  const { data, error } = await supabase.from("workspaces").select("payload, updated_at").eq("id", workspaceId).maybeSingle<WorkspaceRow>();
   if (error) {
     throw error;
   }
-  return data?.payload;
+  if (!data?.payload) return undefined;
+  return {
+    ...data.payload,
+    updatedAt: data.payload.updatedAt ?? data.updated_at
+  };
 };
 
 export const saveRemoteState = async (state: PersistedState): Promise<void> => {
   if (!supabase) return;
+  const updatedAt = state.updatedAt ?? new Date().toISOString();
   const { error } = await supabase
     .from("workspaces")
     .upsert(
       {
         id: workspaceId,
-        payload: state,
-        updated_at: new Date().toISOString()
+        payload: {
+          ...state,
+          updatedAt
+        },
+        updated_at: updatedAt
       },
       { onConflict: "id" }
     );
